@@ -23,8 +23,8 @@ func LoadConfig() (Config, error) {
 	for _, origin := range strings.Split(os.Getenv("MCP_OBJECT_ORIGINS"), ",") {
 		if origin = strings.TrimSpace(origin); origin != "" {
 			u, e := url.Parse(origin)
-			if e != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
-				return c, errors.New("MCP_OBJECT_ORIGINS must be HTTPS origins")
+			if e != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
+				return c, errors.New("MCP_OBJECT_ORIGINS must be explicitly trusted HTTP(S) origins")
 			}
 			c.ObjectOrigins = append(c.ObjectOrigins, origin)
 		}

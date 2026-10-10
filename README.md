@@ -4,7 +4,7 @@
 
 端点 `/mcp`；权限管理 `/mcp/manage`。OAuth 使用 MetaFusion 站内登录、PKCE S256、资源绑定访问令牌与轮换刷新令牌；受限 PAT 加密保存，仅用于调用原生 API。业务权限、数据约束、审计由各服务检查。
 
-配置：`MCP_PUBLIC_URL`、`MCP_API_URL`、`MCP_AUTH_URL`（HTTP(S) origin），`MCP_DATABASE_URL`（仅自有 mcp schema 角色），`MCP_ENCRYPTION_KEY`（32 字节随机值的 base64）。`MCP_SKILLS_REVISION`、`MCP_DOCS_REVISION` 为对应公开仓库的完整提交 SHA；`MCP_OBJECT_ORIGINS` 为允许上传的 HTTPS 对象存储 origin 列表。
+配置：`MCP_PUBLIC_URL`、`MCP_API_URL`、`MCP_AUTH_URL`（HTTP(S) origin），`MCP_DATABASE_URL`（仅自有 mcp schema 角色），`MCP_ENCRYPTION_KEY`（32 字节随机值的 base64）。`MCP_SKILLS_REVISION`、`MCP_DOCS_REVISION` 为对应公开仓库的完整提交 SHA；`MCP_OBJECT_ORIGINS` 为运维明确允许上传的 HTTP(S) 对象存储 origin 列表，可包含容器内网 RustFS 地址。此白名单只接受原生存储 API 签发的上传地址；agent 提供的文件来源仍必须是公开 HTTPS URL。
 
 显式运行 `mcp -migrate` 建立自有 schema，再启动 `mcp`；HTTP 启动只读检查。默认数据库连接池 32/16，HTTP 上游空闲连接总计 1024、单上游 256。读写各 180 RPM，按已验证用户计数；admin 组不计业务 RPM。当前固定窗口计数为进程内；多实例全局额度需另接共享计数。
 
