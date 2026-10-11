@@ -1,6 +1,7 @@
 const locales = await fetch('/mcp/assets/locales.json').then(r => r.json());
 const language = document.getElementById('language');
-language.value = Object.hasOwn(locales, navigator.language) ? navigator.language : 'en-US';
+const requestedLanguages = (new URLSearchParams(location.search).get('ui_locales') || '').split(/\s+/);
+language.value = [...requestedLanguages, navigator.language, 'en-US'].find(value => Object.hasOwn(locales, value));
 let words = locales[language.value];
 const translate = () => { words = locales[language.value]; document.documentElement.lang = language.value; document.title = `${words.title} · MetaFusion`; document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = words[el.dataset.i18n] }); };
 translate();

@@ -75,6 +75,33 @@ type authorization struct {
 	Scopes                     []string
 }
 
+func requestedBusinessScopes(raw string) ([]string, error) {
+	requested := strings.Fields(raw)
+	if len(requested) == 0 {
+		// No explicit scope: consent offers supported permissions, selected by the user.
+		return append([]string(nil), supportedScopes...), nil
+	}
+	scopes := []string{}
+	for _, scope := range requested {
+		// Some OAuth clients append OIDC identity scopes. This resource server does
+		// not offer OIDC: leave them ungranted, never turn them into PAT permissions
+		// or imply an ID token. The token response reports only the granted scopes.
+		if scope == "openid" || scope == "email" || scope == "profile" {
+			continue
+		}
+		if !slices.Contains(supportedScopes, scope) {
+			return nil, errors.New("invalid_scope")
+		}
+		if !slices.Contains(scopes, scope) {
+			scopes = append(scopes, scope)
+		}
+	}
+	if len(scopes) == 0 {
+		return nil, errors.New("invalid_scope")
+	}
+	return scopes, nil
+}
+
 func (s *Server) validateAuthorization(r *http.Request, q url.Values) (authorization, error) {
 	a := authorization{}
 	for _, name := range []string{"client_id", "redirect_uri", "response_type", "resource", "code_challenge", "code_challenge_method", "scope", "state"} {
@@ -98,15 +125,9 @@ func (s *Server) validateAuthorization(r *http.Request, q url.Values) (authoriza
 	if !slices.Contains(c.Redirects, q.Get("redirect_uri")) {
 		return a, errors.New("invalid_redirect_uri")
 	}
-	scopes := strings.Fields(q.Get("scope"))
-	if len(scopes) == 0 {
-		// 客户端未指定 scope 时，由用户在同意页选择本次授予的业务权限。
-		scopes = append([]string(nil), supportedScopes...)
-	}
-	for _, scope := range scopes {
-		if !slices.Contains(supportedScopes, scope) {
-			return a, errors.New("invalid_scope")
-		}
+	scopes, e := requestedBusinessScopes(q.Get("scope"))
+	if e != nil {
+		return a, e
 	}
 	if len(q.Get("state")) > 2048 {
 		return a, errors.New("invalid_request")

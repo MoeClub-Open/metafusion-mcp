@@ -145,6 +145,12 @@ func TestPostgresOAuthToRemoteMCP(t *testing.T) {
 			writeJSON(w, 200, User{ID: "oauth-test-user", Username: "editor", Permissions: []string{"catalog.entity.edit"}, TokenUse: "session"})
 		case "/api/auth/tokens":
 			if r.Method == "POST" {
+				var in struct {
+					Scopes []string `json:"scopes"`
+				}
+				if json.NewDecoder(r.Body).Decode(&in) != nil || strings.Join(in.Scopes, " ") != "mcp.connect catalog.entity.edit" {
+					t.Error("identity or unapproved scopes reached the API credential")
+				}
 				writeJSON(w, 201, map[string]any{"token": "mfp_test_secret", "item": map[string]string{"id": "test-pat"}})
 			}
 		case "/api/auth/tokens/introspect":
@@ -204,7 +210,20 @@ func TestPostgresOAuthToRemoteMCP(t *testing.T) {
 		_, _ = store.DB.Exec("DELETE FROM mcp.clients WHERE id=$1", clientID)
 	})
 	verifier := randomToken()
-	q := url.Values{"client_id": {clientID}, "redirect_uri": {"http://localhost/cb"}, "response_type": {"code"}, "resource": {c.PublicURL + "/mcp"}, "code_challenge": {challenge(verifier)}, "code_challenge_method": {"S256"}, "scope": {"mcp.read catalog.entity.edit"}, "state": {"test-state"}}
+	q := url.Values{"client_id": {clientID}, "redirect_uri": {"http://localhost/cb"}, "response_type": {"code"}, "resource": {c.PublicURL + "/mcp"}, "code_challenge": {challenge(verifier)}, "code_challenge_method": {"S256"}, "scope": {"openid email mcp.read catalog.entity.edit"}, "state": {"test-state"}}
+	page := send("GET", "/mcp/oauth/authorize?"+q.Encode(), "", false)
+	page.Body.Close()
+	if page.StatusCode != 200 {
+		t.Fatalf("ChatGPT authorization rejected: %d", page.StatusCode)
+	}
+	info := read(send("GET", "/mcp/manage/api/authorization?"+q.Encode(), "", true))
+	if mustJSON(info["scopes"]) != `["mcp.read","catalog.entity.edit"]` {
+		t.Fatal("identity scopes offered as permissions")
+	}
+	denied := read(send("POST", "/mcp/manage/api/approve", mustJSON(map[string]any{"request": q.Encode(), "allow": true, "scopes": []string{"mcp.read", "openid"}, "expires_in_days": 1}), true))
+	if denied["error"] != "scope_not_granted" {
+		t.Fatal("identity scope granted as a business permission")
+	}
 	approve := read(send("POST", "/mcp/manage/api/approve", mustJSON(map[string]any{"request": q.Encode(), "allow": true, "scopes": []string{"mcp.read", "catalog.entity.edit"}, "expires_in_days": 1}), true))
 	redirect, e := url.Parse(approve["redirect"].(string))
 	if e != nil || redirect.Query().Get("state") != "test-state" {
@@ -212,6 +231,9 @@ func TestPostgresOAuthToRemoteMCP(t *testing.T) {
 	}
 	form := url.Values{"grant_type": {"authorization_code"}, "client_id": {clientID}, "code": {redirect.Query().Get("code")}, "redirect_uri": {"http://localhost/cb"}, "code_verifier": {verifier}, "resource": {c.PublicURL + "/mcp"}}
 	grant := read(send("POST", "/mcp/oauth/token", form.Encode(), false))
+	if grant["scope"] != "mcp.read catalog.entity.edit" || grant["id_token"] != nil {
+		t.Fatal("ungranted identity scopes or ID token reported")
+	}
 	token := grant["access_token"].(string)
 	if !strings.HasPrefix(token, "mfm_") {
 		t.Fatal("not a dedicated MCP credential")

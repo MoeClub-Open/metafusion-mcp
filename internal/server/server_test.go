@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -18,6 +19,27 @@ import (
 
 func testConfig(base string) Config {
 	return Config{PublicURL: base, APIURL: base, AuthURL: base, Key: make([]byte, 32), AllowedOrigins: []string{base}}
+}
+func TestRequestedBusinessScopes(t *testing.T) {
+	for _, tc := range []struct {
+		name, raw string
+		want      []string
+		invalid   bool
+	}{
+		{"chatgpt identity additions", "openid email mcp.read catalog.entity.edit", []string{"mcp.read", "catalog.entity.edit"}, false},
+		{"profile and duplicates", "profile mcp.read mcp.read", []string{"mcp.read"}, false},
+		{"unknown permission", "openid mcp.read catalog.superuser", nil, true},
+		{"identity only never expands", "openid email profile", nil, true},
+		{"scope is case sensitive", "OPENID mcp.read", nil, true},
+		{"omitted scopes require consent", "", supportedScopes, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := requestedBusinessScopes(tc.raw)
+			if (err != nil) != tc.invalid || !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("got %v, %v; want %v, invalid=%v", got, err, tc.want, tc.invalid)
+			}
+		})
+	}
 }
 func principalContext(p Principal) context.Context {
 	if p.PAT != "" && p.Grant.Scopes == nil {
