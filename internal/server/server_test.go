@@ -31,7 +31,9 @@ func TestRequestedBusinessScopes(t *testing.T) {
 		{"unknown permission", "openid mcp.read catalog.superuser", nil, true},
 		{"identity only never expands", "openid email profile", nil, true},
 		{"scope is case sensitive", "OPENID mcp.read", nil, true},
-		{"omitted scopes require consent", "", supportedScopes, false},
+		{"omitted scopes offer minimal consent", "", []string{"mcp.read", "catalog.entity.edit"}, false},
+		{"wildcard cannot be delegated", "mcp.read *", nil, true},
+		{"management cannot be delegated", "mcp.read catalog.definitions.manage", nil, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := requestedBusinessScopes(tc.raw)

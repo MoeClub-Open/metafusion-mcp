@@ -78,8 +78,9 @@ type authorization struct {
 func requestedBusinessScopes(raw string) ([]string, error) {
 	requested := strings.Fields(raw)
 	if len(requested) == 0 {
-		// No explicit scope: consent offers supported permissions, selected by the user.
-		return append([]string(nil), supportedScopes...), nil
+		// Omitted scope offers a small, explicit consent set. The user may approve
+		// mcp.read alone; other supported business scopes require a new request.
+		return append([]string(nil), defaultScopes...), nil
 	}
 	scopes := []string{}
 	for _, scope := range requested {

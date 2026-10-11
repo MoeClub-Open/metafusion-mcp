@@ -135,6 +135,9 @@ func (b bearerTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 func TestPostgresOAuthToRemoteMCP(t *testing.T) {
 	store := testStore(t)
 	var writes atomic.Int32
+	var canEdit atomic.Bool
+	canEdit.Store(true)
+	var mintedScopes atomic.Value
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/auth/me":
@@ -142,15 +145,24 @@ func TestPostgresOAuthToRemoteMCP(t *testing.T) {
 				writeError(w, 401, "invalid_session")
 				return
 			}
-			writeJSON(w, 200, User{ID: "oauth-test-user", Username: "editor", Permissions: []string{"catalog.entity.edit"}, TokenUse: "session"})
+			permissions := []string{}
+			if canEdit.Load() {
+				permissions = append(permissions, "catalog.entity.edit")
+			}
+			writeJSON(w, 200, User{ID: "oauth-test-user", Username: "editor", Permissions: permissions, TokenUse: "session"})
 		case "/api/auth/tokens":
 			if r.Method == "POST" {
 				var in struct {
 					Scopes []string `json:"scopes"`
 				}
-				if json.NewDecoder(r.Body).Decode(&in) != nil || strings.Join(in.Scopes, " ") != "mcp.connect catalog.entity.edit" {
+				if json.NewDecoder(r.Body).Decode(&in) != nil {
+					t.Error("invalid PAT request")
+				}
+				scope := strings.Join(in.Scopes, " ")
+				if scope != "mcp.connect catalog.entity.edit" && scope != "mcp.connect" {
 					t.Error("identity or unapproved scopes reached the API credential")
 				}
+				mintedScopes.Store(scope)
 				writeJSON(w, 201, map[string]any{"token": "mfp_test_secret", "item": map[string]string{"id": "test-pat"}})
 			}
 		case "/api/auth/tokens/introspect":
@@ -268,5 +280,41 @@ func TestPostgresOAuthToRemoteMCP(t *testing.T) {
 	_, e = session.ListTools(ctx, nil)
 	if e == nil {
 		t.Fatal("revoked MCP grant was accepted")
+	}
+
+	// Scope omitted by the client must offer only the minimal consent set. A
+	// user without edit permission can still approve read-only MCP access.
+	canEdit.Store(false)
+	q.Del("scope")
+	info = read(send("GET", "/mcp/manage/api/authorization?"+q.Encode(), "", true))
+	if mustJSON(info["scopes"]) != `["mcp.read","catalog.entity.edit"]` {
+		t.Fatal("omitted scope offered expanded permissions")
+	}
+	denied = read(send("POST", "/mcp/manage/api/approve", mustJSON(map[string]any{"request": q.Encode(), "allow": true, "scopes": []string{"catalog.entity.edit"}, "expires_in_days": 1}), true))
+	if denied["error"] != "scope_not_granted" {
+		t.Fatal("a read-only user was granted edit permission")
+	}
+	approve = read(send("POST", "/mcp/manage/api/approve", mustJSON(map[string]any{"request": q.Encode(), "allow": true, "scopes": []string{"mcp.read"}, "expires_in_days": 1}), true))
+	redirect, e = url.Parse(approve["redirect"].(string))
+	if e != nil || mintedScopes.Load() != "mcp.connect" {
+		t.Fatal("read-only grant did not mint an identity-only PAT", e)
+	}
+	form.Set("code", redirect.Query().Get("code"))
+	grant = read(send("POST", "/mcp/oauth/token", form.Encode(), false))
+	if grant["scope"] != "mcp.read" {
+		t.Fatal("read-only scope response expanded")
+	}
+	readSession, e := client.Connect(ctx, &mcp.StreamableClientTransport{Endpoint: cloud.URL + "/mcp", HTTPClient: &http.Client{Transport: bearerTransport{http.DefaultTransport, grant["access_token"].(string)}}}, nil)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer readSession.Close()
+	res, e = readSession.CallTool(ctx, &mcp.CallToolParams{Name: "metafusion_search", Arguments: map[string]any{"query": map[string]string{"q": "read-only"}}})
+	if e != nil || res.IsError {
+		t.Fatal("read-only search failed", e)
+	}
+	res, e = readSession.CallTool(ctx, &mcp.CallToolParams{Name: "metafusion_api_call", Arguments: map[string]any{"method": "POST", "path": "/api/catalog/entities", "body": map[string]string{"title": "must not write"}}})
+	if e != nil || !res.IsError || writes.Load() != 1 {
+		t.Fatal("read-only grant authorized an upstream write", e)
 	}
 }

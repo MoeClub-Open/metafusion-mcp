@@ -50,7 +50,9 @@ type User struct {
 	Banned      bool     `json:"banned"`
 }
 
-var supportedScopes = []string{"mcp.read", "catalog.entity.edit", "catalog.relation.edit", "catalog.definitions.manage", "catalog.lifecycle.manage", "catalog.import.submit", "catalog.shelves.manage", "community.post.create", "community.post.moderate", "community.topic.pin", "community.board.manage", "community.report.review", "storage.asset.upload", "storage.asset.moderate", "auth.users.manage", "auth.groups.manage", "auth.invites.manage", "auth.settings.manage", "auth.oauth.manage", "auth.audit.read", "*"}
+var supportedScopes = []string{"mcp.read", "catalog.entity.edit", "catalog.relation.edit", "catalog.import.submit", "community.post.create", "community.post.moderate", "community.topic.pin", "community.report.review", "storage.asset.upload", "storage.asset.moderate", "auth.audit.read"}
+
+var defaultScopes = []string{"mcp.read", "catalog.entity.edit"}
 
 func New(c Config, store *Store) *Server {
 	s := &Server{Config: c, Store: store, HTTP: &http.Client{Timeout: 30 * time.Second, Transport: &http.Transport{MaxIdleConns: 1024, MaxIdleConnsPerHost: 256, IdleConnTimeout: 90 * time.Second, TLSHandshakeTimeout: 5 * time.Second, ResponseHeaderTimeout: 30 * time.Second}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, cache: map[string]cachedPrincipal{}, limiter: newLimiter()}
@@ -274,7 +276,13 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 401, "session_required")
 		return
 	}
-	writeJSON(w, 200, map[string]any{"user": u, "endpoint": s.Config.PublicURL + "/mcp", "scopes": append([]string{"mcp.read"}, u.Permissions...)})
+	scopes := []string{"mcp.read"}
+	for _, scope := range supportedScopes[1:] {
+		if slices.Contains(u.Permissions, "*") || slices.Contains(u.Permissions, scope) {
+			scopes = append(scopes, scope)
+		}
+	}
+	writeJSON(w, 200, map[string]any{"user": u, "endpoint": s.Config.PublicURL + "/mcp", "scopes": scopes})
 }
 func (s *Server) grants(w http.ResponseWriter, r *http.Request) {
 	u, _, e := s.session(r)
@@ -377,6 +385,10 @@ func (s *Server) updateGrant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, scope := range in.Scopes {
+		if !slices.Contains(supportedScopes, scope) {
+			writeError(w, 400, "invalid_scope")
+			return
+		}
 		if !slices.Contains(g.Scopes, scope) {
 			writeError(w, 400, "scope_expansion_requires_authorization")
 			return
