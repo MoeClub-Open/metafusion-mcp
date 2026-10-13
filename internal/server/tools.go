@@ -57,6 +57,7 @@ func currentPrincipal(ctx context.Context) (Principal, bool) {
 func (s *Server) addTools() {
 	s.addCloudTools()
 	s.addGraphTool()
+	s.addQualityTool()
 	object := map[string]any{"type": "object", "additionalProperties": true}
 	apiSchema := map[string]any{"type": "object", "required": []string{"method", "path"}, "additionalProperties": false, "properties": map[string]any{
 		"method": map[string]any{"type": "string", "enum": []string{"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "get", "head", "post", "put", "patch", "delete"}}, "path": map[string]any{"type": "string", "pattern": "^/api/", "description": "Same-instance /api/... path. No host, query, fragment or internal endpoint."}, "query": object, "body": map[string]any{}, "headers": map[string]any{"type": "object", "additionalProperties": map[string]string{"type": "string"}}, "body_base64": map[string]string{"type": "string"}, "content_type": map[string]string{"type": "string"}, "multipart": map[string]any{"type": "array", "items": map[string]any{"type": "object", "required": []string{"name"}, "properties": map[string]any{"name": map[string]string{"type": "string"}, "filename": map[string]string{"type": "string"}, "text": map[string]string{"type": "string"}, "base64": map[string]string{"type": "string"}, "content_type": map[string]string{"type": "string"}}}}}}
@@ -83,7 +84,7 @@ func (s *Server) addTools() {
 		{"metafusion_relationships", "POST", "/api/catalog/relationships/query", "Query direct structural, semantic and attribute-reference neighbors of 1-20 entity UUIDs. body follows RelationshipQueryRequest; results are paginated per subject, so follow has_more/offset before concluding a relation is absent.", true, relationshipQuerySchema()},
 		{"metafusion_candidates", "POST", "/api/catalog/entities/candidates", "Review identity candidates before creating entities; never create duplicates blindly. body follows IdentityCandidateQuery: kind plus at least one of titles, external_ids or attributes.", true, candidateQuerySchema()},
 		{"metafusion_checkout", "POST", "/api/catalog/checkout", "Read versioned snapshots and definitions_etag for a local commit workspace.", true, nil},
-		{"metafusion_commit_preview", "POST", "/api/catalog/commits/preview", "Validate and preview an immutable catalog commit without applying it.", true, nil},
+		{"metafusion_commit_preview", "POST", "/api/catalog/commits/preview", "Validate and preview an immutable catalog commit without applying it. The result carries top-level quality_warnings (advisory automated quality diagnostics on affected entities; never blocks push).", true, nil},
 		{"metafusion_commit_push", "POST", "/api/catalog/commits", "Atomically push the sealed commit. Same ID and identical payload support receipt recovery. 409 is a true conflict; 503 transaction_busy/applied:false permits explicit same-ID retry.", false, nil},
 	}
 	for _, item := range shortcuts {
@@ -108,6 +109,9 @@ func (s *Server) addTools() {
 			}
 			args.Method = item.Method
 			args.Path = item.Path
+			if item.Path == "/api/catalog/commits/preview" {
+				return withQualityWarnings(s.callAPI(ctx, args)), nil
+			}
 			return s.callAPI(ctx, args), nil
 		})
 	}
@@ -143,7 +147,7 @@ func readOperation(method, p string) bool {
 	if method == "GET" || method == "HEAD" {
 		return true
 	}
-	return method == "POST" && slices.Contains([]string{"/api/catalog/relationships/query", "/api/catalog/entities/candidates", "/api/catalog/entities/identity", "/api/catalog/expressions/details", "/api/catalog/checkout", "/api/catalog/commits/preview"}, p)
+	return method == "POST" && slices.Contains([]string{"/api/catalog/relationships/query", "/api/catalog/entities/candidates", "/api/catalog/entities/identity", "/api/catalog/expressions/details", "/api/catalog/checkout", "/api/catalog/commits/preview", "/api/catalog/quality/batch"}, p)
 }
 func queryValues(in map[string]any) (url.Values, error) {
 	q := url.Values{}
