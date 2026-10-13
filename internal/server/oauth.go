@@ -87,7 +87,8 @@ func requestedBusinessScopes(raw string) ([]string, error) {
 		// Some OAuth clients append OIDC identity scopes. This resource server does
 		// not offer OIDC: leave them ungranted, never turn them into PAT permissions
 		// or imply an ID token. The token response reports only the granted scopes.
-		// catalog.import.submit was removed: drop silently so old clients do not break consent.
+		// catalog.import.submit was removed with the write-import API: drop silently so
+		// old clients do not break consent.
 		if scope == "openid" || scope == "email" || scope == "profile" || scope == "catalog.import.submit" {
 			continue
 		}
