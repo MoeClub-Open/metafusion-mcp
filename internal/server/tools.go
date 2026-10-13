@@ -84,8 +84,8 @@ func (s *Server) addTools() {
 		{"metafusion_relationships", "POST", "/api/catalog/relationships/query", "Query direct structural, semantic and attribute-reference neighbors of 1-20 entity UUIDs. body follows RelationshipQueryRequest; results are paginated per subject, so follow has_more/offset before concluding a relation is absent.", true, relationshipQuerySchema()},
 		{"metafusion_candidates", "POST", "/api/catalog/entities/candidates", "Review identity candidates before creating entities; never create duplicates blindly. body follows IdentityCandidateQuery: kind plus at least one of titles, external_ids or attributes.", true, candidateQuerySchema()},
 		{"metafusion_checkout", "POST", "/api/catalog/checkout", "Read versioned snapshots and definitions_etag for a local commit workspace.", true, nil},
-		{"metafusion_commit_preview", "POST", "/api/catalog/commits/preview", "Validate and preview an immutable catalog commit without applying it. The result carries top-level quality_warnings (advisory automated quality diagnostics on affected entities; never blocks push).", true, nil},
-		{"metafusion_commit_push", "POST", "/api/catalog/commits", "Atomically push the sealed commit. Same ID and identical payload support receipt recovery. 409 is a true conflict; 503 transaction_busy/applied:false permits explicit same-ID retry.", false, nil},
+		{"metafusion_commit_preview", "POST", "/api/catalog/commits/preview", "Validate and preview an immutable catalog commit without applying it. Success carries top-level quality_warnings (advisory; never blocks push). A 409 commit_conflict carries top-level conflicts[] with field-level base/current/proposed and suggestions.", true, nil},
+		{"metafusion_commit_push", "POST", "/api/catalog/commits", "Atomically push the sealed commit. Same ID and identical payload support receipt recovery. 409 commit_conflict returns top-level conflicts[] (pointer, base, current, proposed, kind, suggestions); rebase into a new commit. 503 transaction_busy/applied:false permits explicit same-ID retry.", false, nil},
 	}
 	for _, item := range shortcuts {
 		item := item
@@ -110,7 +110,10 @@ func (s *Server) addTools() {
 			args.Method = item.Method
 			args.Path = item.Path
 			if item.Path == "/api/catalog/commits/preview" {
-				return withQualityWarnings(s.callAPI(ctx, args)), nil
+				return withCommitConflicts(withQualityWarnings(s.callAPI(ctx, args))), nil
+			}
+			if item.Path == "/api/catalog/commits" {
+				return withCommitConflicts(s.callAPI(ctx, args)), nil
 			}
 			return s.callAPI(ctx, args), nil
 		})
