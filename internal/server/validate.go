@@ -264,3 +264,45 @@ func validateArgs(schema map[string]any, raw json.RawMessage) (map[string]any, *
 	m, _ := args.(map[string]any)
 	return m, nil
 }
+
+// normalizeSchema converts a schema literal (which may contain typed maps
+// such as map[string]string) into plain JSON maps the validator understands.
+func normalizeSchema(v any) map[string]any {
+	b, _ := json.Marshal(v)
+	var m map[string]any
+	_ = json.Unmarshal(b, &m)
+	fixInts(m)
+	return m
+}
+
+// fixInts restores integer keywords decoded as float64.
+func fixInts(v any) {
+	switch x := v.(type) {
+	case map[string]any:
+		for k, c := range x {
+			switch k {
+			case "minItems", "maxItems", "minLength", "maxLength", "minimum", "maximum":
+				if f, ok := c.(float64); ok {
+					x[k] = int(f)
+					continue
+				}
+			case "required":
+				if list, ok := c.([]any); ok {
+					req := make([]string, 0, len(list))
+					for _, r := range list {
+						if s, ok := r.(string); ok {
+							req = append(req, s)
+						}
+					}
+					x[k] = req
+					continue
+				}
+			}
+			fixInts(c)
+		}
+	case []any:
+		for _, c := range x {
+			fixInts(c)
+		}
+	}
+}
