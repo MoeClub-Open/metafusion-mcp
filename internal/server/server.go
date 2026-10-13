@@ -54,7 +54,7 @@ type User struct {
 	Banned      bool     `json:"banned"`
 }
 
-var supportedScopes = []string{"mcp.read", "catalog.entity.edit", "catalog.relation.edit", "catalog.import.submit", "community.post.create", "community.post.moderate", "community.topic.pin", "community.report.review", "storage.asset.upload", "storage.asset.moderate", "auth.audit.read"}
+var supportedScopes = []string{"mcp.read", "catalog.entity.edit", "catalog.relation.edit", "community.post.create", "community.post.moderate", "community.topic.pin", "community.report.review", "storage.asset.upload", "storage.asset.moderate", "auth.audit.read"}
 
 var defaultScopes = []string{"mcp.read", "catalog.entity.edit"}
 
