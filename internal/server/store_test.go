@@ -87,8 +87,19 @@ func TestPostgresAtomicCodeRefreshRevocation(t *testing.T) {
 	if wins.Load() != 1 {
 		t.Fatalf("code redeemed %d times", wins.Load())
 	}
-	if _, e := s.Access(ctx, access); e != nil {
+	got, e := s.Access(ctx, access)
+	if e != nil {
 		t.Fatal(e)
+	}
+	if got.Expires != nil {
+		t.Fatal("new grant must have nil expires_at")
+	}
+	if got.AccessExpires.IsZero() {
+		t.Fatal("AccessExpires must come from access_expires_at")
+	}
+	now := time.Now()
+	if !got.AccessExpires.After(now) || got.AccessExpires.After(now.Add(16*time.Minute)) {
+		t.Fatalf("AccessExpires %v not within ~15m access TTL", got.AccessExpires)
 	}
 	wins.Store(0)
 	for i := 0; i < 12; i++ {

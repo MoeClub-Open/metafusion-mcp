@@ -20,15 +20,16 @@ type Client struct {
 	Redirects []string `json:"redirect_uris"`
 }
 type Grant struct {
-	ID         string     `json:"id"`
-	UserID     string     `json:"-"`
-	ClientID   string     `json:"client_id"`
-	ClientName string     `json:"client_name"`
-	Scopes     []string   `json:"scopes"`
-	PATID      string     `json:"pat_id,omitempty"`
-	Cipher     []byte     `json:"-"`
-	Expires    *time.Time `json:"expires_at,omitempty"`
-	Revoked    *time.Time `json:"revoked_at"`
+	ID            string     `json:"id"`
+	UserID        string     `json:"-"`
+	ClientID      string     `json:"client_id"`
+	ClientName    string     `json:"client_name"`
+	Scopes        []string   `json:"scopes"`
+	PATID         string     `json:"pat_id,omitempty"`
+	Cipher        []byte     `json:"-"`
+	Expires       *time.Time `json:"expires_at,omitempty"`
+	Revoked       *time.Time `json:"revoked_at"`
+	AccessExpires time.Time  `json:"-"` // short access TTL from mcp.tokens.access_expires_at; for Bearer TokenInfo only
 }
 type Store struct{ DB *sql.DB }
 
@@ -136,7 +137,23 @@ func scanGrant(row scanner) (Grant, error) {
 	return g, e
 }
 func (s *Store) Access(ctx context.Context, token string) (Grant, error) {
-	return scanGrant(s.DB.QueryRowContext(ctx, grantSelect+` JOIN mcp.tokens t ON t.grant_id=g.id WHERE t.access_hash=$1 AND t.revoked_at IS NULL AND t.access_expires_at>now() AND g.revoked_at IS NULL`, hash(token)))
+	row := s.DB.QueryRowContext(ctx, `SELECT g.id,g.user_id,g.client_id,c.name,g.scopes,g.pat_id,g.pat_cipher,g.expires_at,g.revoked_at,t.access_expires_at FROM mcp.grants g JOIN mcp.clients c ON c.id=g.client_id JOIN mcp.tokens t ON t.grant_id=g.id WHERE t.access_hash=$1 AND t.revoked_at IS NULL AND t.access_expires_at>now() AND g.revoked_at IS NULL`, hash(token))
+	var g Grant
+	var b []byte
+	var expires sql.NullTime
+	var accessExpires time.Time
+	e := row.Scan(&g.ID, &g.UserID, &g.ClientID, &g.ClientName, &b, &g.PATID, &g.Cipher, &expires, &g.Revoked, &accessExpires)
+	if e == nil {
+		e = json.Unmarshal(b, &g.Scopes)
+	}
+	if e == nil && expires.Valid {
+		t := expires.Time.UTC()
+		g.Expires = &t
+	}
+	if e == nil {
+		g.AccessExpires = accessExpires.UTC()
+	}
+	return g, e
 }
 func (s *Store) Refresh(ctx context.Context, client, token, access, refresh string) (Grant, error) {
 	tx, e := s.DB.BeginTx(ctx, nil)

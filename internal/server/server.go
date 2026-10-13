@@ -232,11 +232,19 @@ func (s *Server) verify(ctx context.Context, token string, r *http.Request) (*au
 		}
 		groups = current.Groups
 	}
-	var expiration time.Time
-	if g.Expires != nil {
-		expiration = *g.Expires
+	exp, ok := bearerExpiration(g)
+	if !ok {
+		return nil, auth.ErrInvalidToken
 	}
-	return &auth.TokenInfo{UserID: g.UserID, Scopes: g.Scopes, Expiration: expiration, Extra: map[string]any{"principal": Principal{Grant: g, PAT: pat, Groups: groups}}}, nil
+	return &auth.TokenInfo{UserID: g.UserID, Scopes: g.Scopes, Expiration: exp, Extra: map[string]any{"principal": Principal{Grant: g, PAT: pat, Groups: groups}}}, nil
+}
+// bearerExpiration is TokenInfo.Expiration for Bearer verify: short access TTL only.
+// Never use grant.Expires (grants are open-ended until revoked).
+func bearerExpiration(g Grant) (time.Time, bool) {
+	if g.AccessExpires.IsZero() {
+		return time.Time{}, false
+	}
+	return g.AccessExpires, true
 }
 func (s *Server) introspect(ctx context.Context, user, pat string) (cachedPrincipal, error) {
 	key := hash(pat)
