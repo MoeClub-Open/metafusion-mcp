@@ -40,7 +40,7 @@ func testGrant(t *testing.T, s *Store) (Grant, string, string) {
 	if e := s.SaveClient(ctx, client); e != nil {
 		t.Fatal(e)
 	}
-	g := Grant{ID: randomToken(), UserID: randomToken(), ClientID: client.ID, Scopes: []string{"mcp.read"}, Expires: time.Now().Add(time.Hour)}
+	g := Grant{ID: randomToken(), UserID: randomToken(), ClientID: client.ID, Scopes: []string{"mcp.read"}}
 	g.Cipher, _ = encrypt(make([]byte, 32), g.ID, "")
 	code := randomToken()
 	verifier := randomToken()
@@ -232,11 +232,11 @@ func TestPostgresOAuthToRemoteMCP(t *testing.T) {
 	if mustJSON(info["scopes"]) != `["mcp.read","catalog.entity.edit"]` {
 		t.Fatal("identity scopes offered as permissions")
 	}
-	denied := read(send("POST", "/mcp/manage/api/approve", mustJSON(map[string]any{"request": q.Encode(), "allow": true, "scopes": []string{"mcp.read", "openid"}, "expires_in_days": 1}), true))
+	denied := read(send("POST", "/mcp/manage/api/approve", mustJSON(map[string]any{"request": q.Encode(), "allow": true, "scopes": []string{"mcp.read", "openid"}}), true))
 	if denied["error"] != "scope_not_granted" {
 		t.Fatal("identity scope granted as a business permission")
 	}
-	approve := read(send("POST", "/mcp/manage/api/approve", mustJSON(map[string]any{"request": q.Encode(), "allow": true, "scopes": []string{"mcp.read", "catalog.entity.edit"}, "expires_in_days": 1}), true))
+	approve := read(send("POST", "/mcp/manage/api/approve", mustJSON(map[string]any{"request": q.Encode(), "allow": true, "scopes": []string{"mcp.read", "catalog.entity.edit"}}), true))
 	redirect, e := url.Parse(approve["redirect"].(string))
 	if e != nil || redirect.Query().Get("state") != "test-state" {
 		t.Fatal("state lost")
@@ -290,11 +290,11 @@ func TestPostgresOAuthToRemoteMCP(t *testing.T) {
 	if mustJSON(info["scopes"]) != `["mcp.read","catalog.entity.edit"]` {
 		t.Fatal("omitted scope offered expanded permissions")
 	}
-	denied = read(send("POST", "/mcp/manage/api/approve", mustJSON(map[string]any{"request": q.Encode(), "allow": true, "scopes": []string{"catalog.entity.edit"}, "expires_in_days": 1}), true))
+	denied = read(send("POST", "/mcp/manage/api/approve", mustJSON(map[string]any{"request": q.Encode(), "allow": true, "scopes": []string{"catalog.entity.edit"}}), true))
 	if denied["error"] != "scope_not_granted" {
 		t.Fatal("a read-only user was granted edit permission")
 	}
-	approve = read(send("POST", "/mcp/manage/api/approve", mustJSON(map[string]any{"request": q.Encode(), "allow": true, "scopes": []string{"mcp.read"}, "expires_in_days": 1}), true))
+	approve = read(send("POST", "/mcp/manage/api/approve", mustJSON(map[string]any{"request": q.Encode(), "allow": true, "scopes": []string{"mcp.read"}}), true))
 	redirect, e = url.Parse(approve["redirect"].(string))
 	if e != nil || mintedScopes.Load() != "mcp.connect" {
 		t.Fatal("read-only grant did not mint an identity-only PAT", e)

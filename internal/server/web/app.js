@@ -26,6 +26,79 @@ const htmlLocale = normalize(document.documentElement.lang);
 language.value = [...requestedLanguages, siteLocale, htmlLocale, 'zh-CN'].find(value => value && Object.hasOwn(locales, value)) || 'zh-CN';
 let words = locales[language.value];
 
+const MODE_KEY = 'metafusion_theme_mode';
+const ACCENT_KEY = 'metafusion_theme_accent';
+const TONE_KEY = 'metafusion_theme_tone';
+const ACCENTS = [
+  ['blue', '#3b82f6'], ['sky', '#0ea5e9'], ['cyan', '#06b6d4'], ['teal', '#14b8a6'],
+  ['emerald', '#10b981'], ['lime', '#65a30d'], ['amber', '#f59e0b'], ['orange', '#f97316'],
+  ['red', '#ef4444'], ['rose', '#f43f5e'], ['fuchsia', '#d946ef'], ['purple', '#a855f7'],
+  ['violet', '#8b5cf6'], ['indigo', '#6366f1'], ['slate', '#64748b'], ['monochrome', '#71717a'],
+];
+const TONES = new Set(['neutral', 'cool', 'warm', 'deep']);
+const themeModeBtn = document.getElementById('themeMode');
+const themeAccent = document.getElementById('themeAccent');
+
+function applyTheme(mode, accent, tone) {
+  const effective = mode === 'system'
+    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+    : mode;
+  const root = document.documentElement;
+  root.setAttribute('data-theme-mode', effective);
+  root.setAttribute('data-theme-accent', accent);
+  root.setAttribute('data-theme-tone', tone);
+  root.classList.toggle('dark', effective === 'dark');
+  root.classList.toggle('light', effective === 'light');
+  root.style.colorScheme = effective;
+  const meta = document.querySelector('meta[name="theme-color"]');
+  const bg = getComputedStyle(root).getPropertyValue('--bg-color').trim();
+  if (meta && bg) meta.setAttribute('content', bg);
+  themeModeBtn.dataset.mode = mode;
+  themeModeBtn.title = words.themeMode?.[mode] || mode;
+  themeModeBtn.setAttribute('aria-label', themeModeBtn.title);
+  themeModeBtn.textContent = mode === 'light' ? '☀' : mode === 'system' ? '◐' : '☾';
+}
+
+function readTheme() {
+  const modeRaw = localStorage.getItem(MODE_KEY);
+  const mode = modeRaw === 'light' || modeRaw === 'dark' || modeRaw === 'system' ? modeRaw : 'dark';
+  const accentRaw = localStorage.getItem(ACCENT_KEY);
+  const accent = ACCENTS.some(([id]) => id === accentRaw) ? accentRaw : 'blue';
+  const toneRaw = localStorage.getItem(TONE_KEY);
+  const tone = TONES.has(toneRaw) ? toneRaw : 'neutral';
+  return { mode, accent, tone };
+}
+
+function initTheme() {
+  themeAccent.replaceChildren();
+  for (const [id, swatch] of ACCENTS) {
+    const option = document.createElement('option');
+    option.value = id;
+    option.textContent = words.accents?.[id] || id;
+    option.style.color = swatch;
+    themeAccent.append(option);
+  }
+  const current = readTheme();
+  themeAccent.value = current.accent;
+  applyTheme(current.mode, current.accent, current.tone);
+  themeModeBtn.onclick = () => {
+    const cycle = { dark: 'light', light: 'system', system: 'dark' };
+    const next = cycle[themeModeBtn.dataset.mode || 'dark'] || 'dark';
+    localStorage.setItem(MODE_KEY, next);
+    const t = readTheme();
+    applyTheme(next, t.accent, t.tone);
+  };
+  themeAccent.onchange = () => {
+    localStorage.setItem(ACCENT_KEY, themeAccent.value);
+    const t = readTheme();
+    applyTheme(t.mode, themeAccent.value, t.tone);
+  };
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    const t = readTheme();
+    if (t.mode === 'system') applyTheme(t.mode, t.accent, t.tone);
+  });
+}
+
 const SCOPE_GROUPS = [
   { id: 'catalogRead', scopes: ['mcp.read'] },
   { id: 'catalogEdit', scopes: ['catalog.entity.edit', 'catalog.relation.edit'] },
@@ -39,7 +112,13 @@ const translate = () => {
   document.documentElement.lang = language.value;
   document.title = `${words.manageTitle} · MetaFusion`;
   document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = words[el.dataset.i18n] || ''; });
+  for (const option of themeAccent.options) {
+    option.textContent = words.accents?.[option.value] || option.value;
+  }
+  const t = readTheme();
+  applyTheme(t.mode, t.accent, t.tone);
 };
+initTheme();
 translate();
 
 const notice = document.getElementById('notice');
@@ -52,6 +131,7 @@ const landing = document.getElementById('landing');
 const manageShell = document.getElementById('manageShell');
 const workspace = document.getElementById('workspace');
 const consent = document.getElementById('consent');
+const selectAllScopes = document.getElementById('selectAllScopes');
 const isLanding = location.pathname === '/mcp' || location.pathname === '/mcp/';
 const isAuthorize = location.pathname === '/mcp/oauth/authorize';
 
@@ -128,6 +208,18 @@ function setGroupChecks(groupEl, checked) {
   groupEl.querySelectorAll('input[type=checkbox]').forEach(input => { input.checked = checked; });
 }
 
+function syncSelectAll() {
+  const boxes = [...document.querySelectorAll('#scopes input[type=checkbox]')];
+  if (!boxes.length) {
+    selectAllScopes.checked = false;
+    selectAllScopes.indeterminate = false;
+    return;
+  }
+  const checked = boxes.filter(input => input.checked).length;
+  selectAllScopes.checked = checked === boxes.length;
+  selectAllScopes.indeterminate = checked > 0 && checked < boxes.length;
+}
+
 function scopePicker(container, available, checked) {
   container.replaceChildren();
   const availableSet = new Set(available);
@@ -136,7 +228,7 @@ function scopePicker(container, available, checked) {
     const scopes = group.scopes.filter(scope => availableSet.has(scope));
     if (!scopes.length) continue;
     const details = element('details', undefined, 'scope-group');
-    details.open = scopes.some(scope => checkedSet.has(scope)) || isAuthorize;
+    details.open = true;
     const summary = element('summary');
     summary.append(element('span', words.groups[group.id].title));
     summary.append(element('span', words.groups[group.id].description, 'scope-group-desc'));
@@ -145,8 +237,16 @@ function scopePicker(container, available, checked) {
     selectAll.type = 'button';
     const clearAll = element('button', words.clearGroup);
     clearAll.type = 'button';
-    selectAll.onclick = (event) => { event.preventDefault(); setGroupChecks(details, true); };
-    clearAll.onclick = (event) => { event.preventDefault(); setGroupChecks(details, false); };
+    selectAll.onclick = (event) => {
+      event.preventDefault();
+      setGroupChecks(details, true);
+      syncSelectAll();
+    };
+    clearAll.onclick = (event) => {
+      event.preventDefault();
+      setGroupChecks(details, false);
+      syncSelectAll();
+    };
     actions.append(selectAll, clearAll);
     summary.append(actions);
     details.append(summary);
@@ -158,6 +258,7 @@ function scopePicker(container, available, checked) {
       input.type = 'checkbox';
       input.value = scope;
       input.checked = checkedSet.has(scope);
+      input.addEventListener('change', syncSelectAll);
       const name = element('span', undefined, 'scope-name');
       name.append(document.createTextNode(meta.name));
       name.append(element('span', scope, 'scope-code'));
@@ -167,7 +268,15 @@ function scopePicker(container, available, checked) {
     details.append(list);
     container.append(details);
   }
+  if (container.id === 'scopes') syncSelectAll();
 }
+
+selectAllScopes.addEventListener('change', () => {
+  document.querySelectorAll('#scopes input[type=checkbox]').forEach(input => {
+    input.checked = selectAllScopes.checked;
+  });
+  syncSelectAll();
+});
 
 function busy(button, fn) {
   button.disabled = true;
@@ -176,29 +285,8 @@ function busy(button, fn) {
   return fn().catch(showError).finally(() => { button.disabled = false; });
 }
 
-function expiryDays() {
-  const picked = document.querySelector('input[name=days]:checked');
-  if (!picked) return NaN;
-  if (picked.value === 'custom') return Number(document.getElementById('daysCustom').value);
-  return Number(picked.value);
-}
-
-function syncCustomDays() {
-  const custom = document.querySelector('input[name=days][value=custom]');
-  const input = document.getElementById('daysCustom');
-  input.hidden = !(custom && custom.checked);
-}
-
-document.querySelectorAll('input[name=days]').forEach(input => {
-  input.addEventListener('change', syncCustomDays);
-});
-syncCustomDays();
-
 function statusFor(grant) {
   if (grant.revoked_at) return { key: 'revoked', className: 'revoked' };
-  const expires = new Date(grant.expires_at).getTime();
-  if (expires <= Date.now()) return { key: 'expired', className: 'expired' };
-  if (expires - Date.now() <= 7 * 24 * 60 * 60 * 1000) return { key: 'expiring', className: 'expiring' };
   return { key: 'active', className: 'active' };
 }
 
@@ -229,10 +317,8 @@ async function refresh() {
     document.getElementById('client').textContent = `${authorization.client.client_name} (${authorization.client.client_id})`;
     document.getElementById('callback').textContent = `${words.callback}: ${authorization.redirect_uri}`;
     const allowed = authorization.scopes.filter(scope => scopes.includes(scope) || user.permissions.includes('*'));
-    const existing = authorization.existing_scopes || [];
-    const prechecked = [...new Set([...allowed.filter(scope => authorization.scopes.includes(scope)), ...existing.filter(scope => allowed.includes(scope))])];
-    if (!prechecked.length && allowed.includes('mcp.read')) prechecked.push('mcp.read');
-    scopePicker(document.getElementById('scopes'), allowed, prechecked);
+    // Default: select every allowed scope in all five groups.
+    scopePicker(document.getElementById('scopes'), allowed, allowed);
     consent.hidden = false;
   } else {
     consent.hidden = true;
@@ -250,8 +336,7 @@ async function refresh() {
     head.append(element('span', words.status[status.key], `status ${status.className}`));
     card.append(head);
     card.append(element('p', `client_id: ${grant.client_id}`, 'meta'));
-    card.append(element('p', `${words.expires}: ${new Date(grant.expires_at).toLocaleString(language.value)}`, 'meta'));
-    if (grant.revoked_at || status.key === 'expired') {
+    if (grant.revoked_at) {
       container.append(card);
       continue;
     }
@@ -295,11 +380,9 @@ async function refresh() {
 for (const [id, allow] of [['approve', true], ['deny', false]]) {
   const button = document.getElementById(id);
   button.onclick = () => busy(button, async () => {
-    const days = expiryDays();
-    if (!Number.isInteger(days) || days < 1 || days > 30) throw Object.assign(new Error('invalid_expiry'), { code: 'invalid_expiry' });
     const response = await api('approve', {
       method: 'POST',
-      body: JSON.stringify({ request, allow, scopes: selected(document.getElementById('scopes')), expires_in_days: days }),
+      body: JSON.stringify({ request, allow, scopes: selected(document.getElementById('scopes')) }),
     });
     location.assign(response.redirect);
   });

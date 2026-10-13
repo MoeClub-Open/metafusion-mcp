@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS mcp.clients (
 CREATE TABLE IF NOT EXISTS mcp.grants (
  id text PRIMARY KEY, user_id text NOT NULL, client_id text NOT NULL REFERENCES mcp.clients(id),
  scopes jsonb NOT NULL, pat_id text NOT NULL DEFAULT '', pat_cipher bytea NOT NULL,
- created_at timestamptz NOT NULL DEFAULT now(), expires_at timestamptz NOT NULL,
+ created_at timestamptz NOT NULL DEFAULT now(), expires_at timestamptz,
  revoked_at timestamptz
 );
 CREATE INDEX IF NOT EXISTS grants_user ON mcp.grants(user_id, created_at DESC);
@@ -32,3 +32,6 @@ CREATE TABLE IF NOT EXISTS mcp.drafts (
 );
 CREATE INDEX IF NOT EXISTS drafts_owner ON mcp.drafts(user_id, created_at DESC);
 INSERT INTO mcp.schema_version(version) VALUES(1) ON CONFLICT DO NOTHING;
+-- Grant authorizations no longer expire: clear legacy deadlines so existing rows stay valid until revoked.
+ALTER TABLE mcp.grants ALTER COLUMN expires_at DROP NOT NULL;
+UPDATE mcp.grants SET expires_at = NULL WHERE expires_at IS NOT NULL;

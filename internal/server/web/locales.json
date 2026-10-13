@@ -10,10 +10,6 @@
     "endpoint": "MCP 端点",
     "authorization": "授权应用",
     "unverified": "该客户端为自助注册应用，尚未经过站点核验。请确认客户端名称和回调地址。",
-    "expiry": "有效期",
-    "expiry7": "7 天",
-    "expiry30": "30 天",
-    "expiryCustom": "自定义",
     "approve": "同意并继续",
     "deny": "拒绝",
     "grants": "我的 MCP 授权",
@@ -30,36 +26,82 @@
     "sessionRequired": "请先登录后再管理授权",
     "signedIn": "当前账号",
     "callback": "回调地址",
-    "expires": "到期时间",
     "confirmRevoke": "确定撤销这个应用的全部 MCP 授权？",
     "cleanup": "MCP 授权已更新，但底层 API 令牌未清理。请在账号的 API 令牌页核查。",
     "copied": "已保存",
     "selectGroup": "全选本组",
     "clearGroup": "清空本组",
-    "status": { "active": "有效", "expiring": "即将到期", "expired": "已过期", "revoked": "已撤销" },
+    "status": {
+      "active": "有效",
+      "revoked": "已撤销"
+    },
     "groups": {
-      "catalogRead": { "title": "目录只读", "description": "查看条目与关系" },
-      "catalogEdit": { "title": "目录编辑", "description": "创建、修改条目与关系" },
-      "community": { "title": "社区", "description": "评论、举报与审核" },
-      "storage": { "title": "存储", "description": "文件上传与读取" },
-      "audit": { "title": "审计", "description": "查看授权与操作日志" }
+      "catalogRead": {
+        "title": "目录只读",
+        "description": "查看条目与关系"
+      },
+      "catalogEdit": {
+        "title": "目录编辑",
+        "description": "创建、修改条目与关系"
+      },
+      "community": {
+        "title": "社区",
+        "description": "评论、举报与审核"
+      },
+      "storage": {
+        "title": "存储",
+        "description": "文件上传与读取"
+      },
+      "audit": {
+        "title": "审计",
+        "description": "查看授权与操作日志"
+      }
     },
     "scopes": {
-      "mcp.read": { "name": "公开数据查询", "purpose": "读取目录与关系等公开平台数据" },
-      "catalog.entity.edit": { "name": "编辑目录实体", "purpose": "创建或修改作品、发行、人物等实体" },
-      "catalog.relation.edit": { "name": "编辑实体关系", "purpose": "建立或调整实体之间的关系" },
-      "community.post.create": { "name": "发帖", "purpose": "在社区发帖与回复" },
-      "community.post.moderate": { "name": "管理贴文", "purpose": "审核或处理社区贴文" },
-      "community.topic.pin": { "name": "置顶主题", "purpose": "置顶或取消置顶主题" },
-      "community.report.review": { "name": "处理举报", "purpose": "查看并处理用户举报" },
-      "storage.asset.upload": { "name": "上传资源", "purpose": "上传图片等存储资源" },
-      "storage.asset.moderate": { "name": "审核资源", "purpose": "审核或管理已上传资源" },
-      "auth.audit.read": { "name": "查看审计日志", "purpose": "读取授权与操作审计记录" }
+      "mcp.read": {
+        "name": "公开数据查询",
+        "purpose": "读取目录与关系等公开平台数据"
+      },
+      "catalog.entity.edit": {
+        "name": "编辑目录实体",
+        "purpose": "创建或修改作品、发行、人物等实体"
+      },
+      "catalog.relation.edit": {
+        "name": "编辑实体关系",
+        "purpose": "建立或调整实体之间的关系"
+      },
+      "community.post.create": {
+        "name": "发帖",
+        "purpose": "在社区发帖与回复"
+      },
+      "community.post.moderate": {
+        "name": "管理贴文",
+        "purpose": "审核或处理社区贴文"
+      },
+      "community.topic.pin": {
+        "name": "置顶主题",
+        "purpose": "置顶或取消置顶主题"
+      },
+      "community.report.review": {
+        "name": "处理举报",
+        "purpose": "查看并处理用户举报"
+      },
+      "storage.asset.upload": {
+        "name": "上传资源",
+        "purpose": "上传图片等存储资源"
+      },
+      "storage.asset.moderate": {
+        "name": "审核资源",
+        "purpose": "审核或管理已上传资源"
+      },
+      "auth.audit.read": {
+        "name": "查看审计日志",
+        "purpose": "读取授权与操作审计记录"
+      }
     },
     "errors": {
       "session_required": "请先登录后再管理授权",
       "invalid_scope": "权限选择无效",
-      "invalid_expiry": "请选择 1 到 30 天",
       "scope_expansion_requires_authorization": "增加权限需要重新授权",
       "store_unavailable": "服务暂时不可用，请稍后重试",
       "not_found": "找不到该授权",
@@ -68,6 +110,32 @@
       "origin_not_allowed": "来源不被允许",
       "same_origin_required": "请从本站发起操作",
       "rate_limited": "请求过于频繁，请稍后再试"
+    },
+    "selectAll": "全选所有权限",
+    "navHome": "首页",
+    "navManage": "授权管理",
+    "themeMode": {
+      "dark": "深色",
+      "light": "浅色",
+      "system": "跟随系统"
+    },
+    "accents": {
+      "blue": "蓝色",
+      "sky": "天空",
+      "cyan": "青色",
+      "teal": "青绿",
+      "emerald": "翠绿",
+      "lime": "黄绿",
+      "amber": "琥珀",
+      "orange": "橙色",
+      "red": "红色",
+      "rose": "玫红",
+      "fuchsia": "紫红",
+      "purple": "紫色",
+      "violet": "紫罗兰",
+      "indigo": "靛蓝",
+      "slate": "石板",
+      "monochrome": "单色"
     }
   },
   "en-US": {
@@ -81,10 +149,6 @@
     "endpoint": "MCP endpoint",
     "authorization": "Authorize application",
     "unverified": "This self-registered client has not been verified by the site. Check its name and callback address.",
-    "expiry": "Expiry",
-    "expiry7": "7 days",
-    "expiry30": "30 days",
-    "expiryCustom": "Custom",
     "approve": "Allow and continue",
     "deny": "Deny",
     "grants": "My MCP authorizations",
@@ -101,36 +165,82 @@
     "sessionRequired": "Sign in before managing authorizations",
     "signedIn": "Signed in as",
     "callback": "Callback address",
-    "expires": "Expires",
     "confirmRevoke": "Revoke all MCP access for this application?",
     "cleanup": "MCP access was updated, but the underlying API token could not be cleaned up. Check your API token settings.",
     "copied": "Saved",
     "selectGroup": "Select all in group",
     "clearGroup": "Clear group",
-    "status": { "active": "Active", "expiring": "Expiring soon", "expired": "Expired", "revoked": "Revoked" },
+    "status": {
+      "active": "Active",
+      "revoked": "Revoked"
+    },
     "groups": {
-      "catalogRead": { "title": "Catalog read", "description": "View entities and relations" },
-      "catalogEdit": { "title": "Catalog edit", "description": "Create and modify entities and relations" },
-      "community": { "title": "Community", "description": "Posts, reports, and moderation" },
-      "storage": { "title": "Storage", "description": "Upload and manage files" },
-      "audit": { "title": "Audit", "description": "View authorization and action logs" }
+      "catalogRead": {
+        "title": "Catalog read",
+        "description": "View entities and relations"
+      },
+      "catalogEdit": {
+        "title": "Catalog edit",
+        "description": "Create and modify entities and relations"
+      },
+      "community": {
+        "title": "Community",
+        "description": "Posts, reports, and moderation"
+      },
+      "storage": {
+        "title": "Storage",
+        "description": "Upload and manage files"
+      },
+      "audit": {
+        "title": "Audit",
+        "description": "View authorization and action logs"
+      }
     },
     "scopes": {
-      "mcp.read": { "name": "Public data queries", "purpose": "Read public catalog and relation data" },
-      "catalog.entity.edit": { "name": "Edit catalog entities", "purpose": "Create or update works, releases, people, and more" },
-      "catalog.relation.edit": { "name": "Edit entity relations", "purpose": "Create or adjust relations between entities" },
-      "community.post.create": { "name": "Create posts", "purpose": "Create community posts and replies" },
-      "community.post.moderate": { "name": "Moderate posts", "purpose": "Review or manage community posts" },
-      "community.topic.pin": { "name": "Pin topics", "purpose": "Pin or unpin topics" },
-      "community.report.review": { "name": "Review reports", "purpose": "Review and handle user reports" },
-      "storage.asset.upload": { "name": "Upload assets", "purpose": "Upload images and other stored assets" },
-      "storage.asset.moderate": { "name": "Moderate assets", "purpose": "Review or manage uploaded assets" },
-      "auth.audit.read": { "name": "Read audit logs", "purpose": "Read authorization and action audit records" }
+      "mcp.read": {
+        "name": "Public data queries",
+        "purpose": "Read public catalog and relation data"
+      },
+      "catalog.entity.edit": {
+        "name": "Edit catalog entities",
+        "purpose": "Create or update works, releases, people, and more"
+      },
+      "catalog.relation.edit": {
+        "name": "Edit entity relations",
+        "purpose": "Create or adjust relations between entities"
+      },
+      "community.post.create": {
+        "name": "Create posts",
+        "purpose": "Create community posts and replies"
+      },
+      "community.post.moderate": {
+        "name": "Moderate posts",
+        "purpose": "Review or manage community posts"
+      },
+      "community.topic.pin": {
+        "name": "Pin topics",
+        "purpose": "Pin or unpin topics"
+      },
+      "community.report.review": {
+        "name": "Review reports",
+        "purpose": "Review and handle user reports"
+      },
+      "storage.asset.upload": {
+        "name": "Upload assets",
+        "purpose": "Upload images and other stored assets"
+      },
+      "storage.asset.moderate": {
+        "name": "Moderate assets",
+        "purpose": "Review or manage uploaded assets"
+      },
+      "auth.audit.read": {
+        "name": "Read audit logs",
+        "purpose": "Read authorization and action audit records"
+      }
     },
     "errors": {
       "session_required": "Sign in before managing authorizations",
       "invalid_scope": "Invalid permission selection",
-      "invalid_expiry": "Choose between 1 and 30 days",
       "scope_expansion_requires_authorization": "Adding permissions requires re-authorization",
       "store_unavailable": "Service temporarily unavailable",
       "not_found": "Authorization not found",
@@ -139,6 +249,32 @@
       "origin_not_allowed": "Origin not allowed",
       "same_origin_required": "Perform this action from the site origin",
       "rate_limited": "Too many requests; try again later"
+    },
+    "selectAll": "Select all permissions",
+    "navHome": "Home",
+    "navManage": "Authorization",
+    "themeMode": {
+      "dark": "Dark",
+      "light": "Light",
+      "system": "System"
+    },
+    "accents": {
+      "blue": "Blue",
+      "sky": "Sky",
+      "cyan": "Cyan",
+      "teal": "Teal",
+      "emerald": "Emerald",
+      "lime": "Lime",
+      "amber": "Amber",
+      "orange": "Orange",
+      "red": "Red",
+      "rose": "Rose",
+      "fuchsia": "Fuchsia",
+      "purple": "Purple",
+      "violet": "Violet",
+      "indigo": "Indigo",
+      "slate": "Slate",
+      "monochrome": "Monochrome"
     }
   },
   "zh-TW": {
@@ -152,10 +288,6 @@
     "endpoint": "MCP 端點",
     "authorization": "授權應用程式",
     "unverified": "此用戶端為自助註冊應用程式，尚未經過站點核驗。請確認名稱與回呼位址。",
-    "expiry": "有效期",
-    "expiry7": "7 天",
-    "expiry30": "30 天",
-    "expiryCustom": "自訂",
     "approve": "同意並繼續",
     "deny": "拒絕",
     "grants": "我的 MCP 授權",
@@ -172,36 +304,82 @@
     "sessionRequired": "請先登入後再管理授權",
     "signedIn": "目前帳號",
     "callback": "回呼位址",
-    "expires": "到期時間",
     "confirmRevoke": "確定撤銷此應用程式的全部 MCP 授權？",
     "cleanup": "MCP 授權已更新，但底層 API 權杖未清理。請在帳號的 API 權杖頁核查。",
     "copied": "已儲存",
     "selectGroup": "全選本組",
     "clearGroup": "清空本組",
-    "status": { "active": "有效", "expiring": "即將到期", "expired": "已過期", "revoked": "已撤銷" },
+    "status": {
+      "active": "有效",
+      "revoked": "已撤銷"
+    },
     "groups": {
-      "catalogRead": { "title": "目錄唯讀", "description": "查看條目與關係" },
-      "catalogEdit": { "title": "目錄編輯", "description": "建立、修改條目與關係" },
-      "community": { "title": "社群", "description": "留言、檢舉與審核" },
-      "storage": { "title": "儲存", "description": "檔案上傳與讀取" },
-      "audit": { "title": "稽核", "description": "查看授權與操作紀錄" }
+      "catalogRead": {
+        "title": "目錄唯讀",
+        "description": "查看條目與關係"
+      },
+      "catalogEdit": {
+        "title": "目錄編輯",
+        "description": "建立、修改條目與關係"
+      },
+      "community": {
+        "title": "社群",
+        "description": "留言、檢舉與審核"
+      },
+      "storage": {
+        "title": "儲存",
+        "description": "檔案上傳與讀取"
+      },
+      "audit": {
+        "title": "稽核",
+        "description": "查看授權與操作紀錄"
+      }
     },
     "scopes": {
-      "mcp.read": { "name": "公開資料查詢", "purpose": "讀取目錄與關係等公開平台資料" },
-      "catalog.entity.edit": { "name": "編輯目錄實體", "purpose": "建立或修改作品、發行、人物等實體" },
-      "catalog.relation.edit": { "name": "編輯實體關係", "purpose": "建立或調整實體之間的關係" },
-      "community.post.create": { "name": "發文", "purpose": "在社群發文與回覆" },
-      "community.post.moderate": { "name": "管理貼文", "purpose": "審核或處理社群貼文" },
-      "community.topic.pin": { "name": "置頂主題", "purpose": "置頂或取消置頂主題" },
-      "community.report.review": { "name": "處理檢舉", "purpose": "查看並處理使用者檢舉" },
-      "storage.asset.upload": { "name": "上傳資源", "purpose": "上傳圖片等儲存資源" },
-      "storage.asset.moderate": { "name": "審核資源", "purpose": "審核或管理已上傳資源" },
-      "auth.audit.read": { "name": "查看稽核紀錄", "purpose": "讀取授權與操作稽核紀錄" }
+      "mcp.read": {
+        "name": "公開資料查詢",
+        "purpose": "讀取目錄與關係等公開平台資料"
+      },
+      "catalog.entity.edit": {
+        "name": "編輯目錄實體",
+        "purpose": "建立或修改作品、發行、人物等實體"
+      },
+      "catalog.relation.edit": {
+        "name": "編輯實體關係",
+        "purpose": "建立或調整實體之間的關係"
+      },
+      "community.post.create": {
+        "name": "發文",
+        "purpose": "在社群發文與回覆"
+      },
+      "community.post.moderate": {
+        "name": "管理貼文",
+        "purpose": "審核或處理社群貼文"
+      },
+      "community.topic.pin": {
+        "name": "置頂主題",
+        "purpose": "置頂或取消置頂主題"
+      },
+      "community.report.review": {
+        "name": "處理檢舉",
+        "purpose": "查看並處理使用者檢舉"
+      },
+      "storage.asset.upload": {
+        "name": "上傳資源",
+        "purpose": "上傳圖片等儲存資源"
+      },
+      "storage.asset.moderate": {
+        "name": "審核資源",
+        "purpose": "審核或管理已上傳資源"
+      },
+      "auth.audit.read": {
+        "name": "查看稽核紀錄",
+        "purpose": "讀取授權與操作稽核紀錄"
+      }
     },
     "errors": {
       "session_required": "請先登入後再管理授權",
       "invalid_scope": "權限選擇無效",
-      "invalid_expiry": "請選擇 1 到 30 天",
       "scope_expansion_requires_authorization": "增加權限需要重新授權",
       "store_unavailable": "服務暫時無法使用，請稍後再試",
       "not_found": "找不到該授權",
@@ -210,6 +388,32 @@
       "origin_not_allowed": "來源不被允許",
       "same_origin_required": "請從本站發起操作",
       "rate_limited": "請求過於頻繁，請稍後再試"
+    },
+    "selectAll": "全選所有權限",
+    "navHome": "首頁",
+    "navManage": "授權管理",
+    "themeMode": {
+      "dark": "深色",
+      "light": "淺色",
+      "system": "跟隨系統"
+    },
+    "accents": {
+      "blue": "藍色",
+      "sky": "天空",
+      "cyan": "青色",
+      "teal": "青綠",
+      "emerald": "翠綠",
+      "lime": "黃綠",
+      "amber": "琥珀",
+      "orange": "橙色",
+      "red": "紅色",
+      "rose": "玫紅",
+      "fuchsia": "紫紅",
+      "purple": "紫色",
+      "violet": "紫羅蘭",
+      "indigo": "靛藍",
+      "slate": "石板",
+      "monochrome": "單色"
     }
   },
   "ja-JP": {
@@ -223,10 +427,6 @@
     "endpoint": "MCP エンドポイント",
     "authorization": "アプリを認可",
     "unverified": "このクライアントは自己登録され、サイトによる確認は未実施です。名前とコールバック先を確認してください。",
-    "expiry": "有効期間",
-    "expiry7": "7 日",
-    "expiry30": "30 日",
-    "expiryCustom": "カスタム",
     "approve": "許可して続行",
     "deny": "拒否",
     "grants": "MCP 認可一覧",
@@ -243,36 +443,82 @@
     "sessionRequired": "認可を管理する前にログインしてください",
     "signedIn": "ログイン中のアカウント",
     "callback": "コールバック先",
-    "expires": "有効期限",
     "confirmRevoke": "このアプリの MCP 認可をすべて取り消しますか？",
     "cleanup": "MCP 認可は更新されましたが、API トークンを削除できませんでした。アカウント設定で確認してください。",
     "copied": "保存しました",
     "selectGroup": "グループを全選択",
     "clearGroup": "グループをクリア",
-    "status": { "active": "有効", "expiring": "まもなく期限切れ", "expired": "期限切れ", "revoked": "取り消し済み" },
+    "status": {
+      "active": "有効",
+      "revoked": "取り消し済み"
+    },
     "groups": {
-      "catalogRead": { "title": "カタログ読み取り", "description": "エントリと関係の閲覧" },
-      "catalogEdit": { "title": "カタログ編集", "description": "エントリと関係の作成・変更" },
-      "community": { "title": "コミュニティ", "description": "投稿・通報・モデレーション" },
-      "storage": { "title": "ストレージ", "description": "ファイルのアップロードと管理" },
-      "audit": { "title": "監査", "description": "認可と操作ログの閲覧" }
+      "catalogRead": {
+        "title": "カタログ読み取り",
+        "description": "エントリと関係の閲覧"
+      },
+      "catalogEdit": {
+        "title": "カタログ編集",
+        "description": "エントリと関係の作成・変更"
+      },
+      "community": {
+        "title": "コミュニティ",
+        "description": "投稿・通報・モデレーション"
+      },
+      "storage": {
+        "title": "ストレージ",
+        "description": "ファイルのアップロードと管理"
+      },
+      "audit": {
+        "title": "監査",
+        "description": "認可と操作ログの閲覧"
+      }
     },
     "scopes": {
-      "mcp.read": { "name": "公開データの検索", "purpose": "公開カタログと関係データを読み取る" },
-      "catalog.entity.edit": { "name": "カタログ実体の編集", "purpose": "作品・リリース・人物などの作成・更新" },
-      "catalog.relation.edit": { "name": "関係の編集", "purpose": "実体間の関係を作成・調整する" },
-      "community.post.create": { "name": "投稿の作成", "purpose": "コミュニティへの投稿と返信" },
-      "community.post.moderate": { "name": "投稿の管理", "purpose": "コミュニティ投稿の審査・管理" },
-      "community.topic.pin": { "name": "トピックの固定", "purpose": "トピックの固定と解除" },
-      "community.report.review": { "name": "通報の処理", "purpose": "ユーザー通報の確認と処理" },
-      "storage.asset.upload": { "name": "アセットのアップロード", "purpose": "画像などの保存アセットをアップロード" },
-      "storage.asset.moderate": { "name": "アセットの審査", "purpose": "アップロード済みアセットの審査・管理" },
-      "auth.audit.read": { "name": "監査ログの閲覧", "purpose": "認可と操作の監査記録を読む" }
+      "mcp.read": {
+        "name": "公開データの検索",
+        "purpose": "公開カタログと関係データを読み取る"
+      },
+      "catalog.entity.edit": {
+        "name": "カタログ実体の編集",
+        "purpose": "作品・リリース・人物などの作成・更新"
+      },
+      "catalog.relation.edit": {
+        "name": "関係の編集",
+        "purpose": "実体間の関係を作成・調整する"
+      },
+      "community.post.create": {
+        "name": "投稿の作成",
+        "purpose": "コミュニティへの投稿と返信"
+      },
+      "community.post.moderate": {
+        "name": "投稿の管理",
+        "purpose": "コミュニティ投稿の審査・管理"
+      },
+      "community.topic.pin": {
+        "name": "トピックの固定",
+        "purpose": "トピックの固定と解除"
+      },
+      "community.report.review": {
+        "name": "通報の処理",
+        "purpose": "ユーザー通報の確認と処理"
+      },
+      "storage.asset.upload": {
+        "name": "アセットのアップロード",
+        "purpose": "画像などの保存アセットをアップロード"
+      },
+      "storage.asset.moderate": {
+        "name": "アセットの審査",
+        "purpose": "アップロード済みアセットの審査・管理"
+      },
+      "auth.audit.read": {
+        "name": "監査ログの閲覧",
+        "purpose": "認可と操作の監査記録を読む"
+      }
     },
     "errors": {
       "session_required": "認可を管理する前にログインしてください",
       "invalid_scope": "権限の選択が無効です",
-      "invalid_expiry": "1〜30 日を選んでください",
       "scope_expansion_requires_authorization": "権限の追加には再認可が必要です",
       "store_unavailable": "サービスを一時的に利用できません",
       "not_found": "認可が見つかりません",
@@ -281,6 +527,32 @@
       "origin_not_allowed": "許可されていないオリジンです",
       "same_origin_required": "このサイトから操作してください",
       "rate_limited": "リクエストが多すぎます。しばらくしてから再試行してください"
+    },
+    "selectAll": "すべての権限を選択",
+    "navHome": "ホーム",
+    "navManage": "認可管理",
+    "themeMode": {
+      "dark": "ダーク",
+      "light": "ライト",
+      "system": "システム"
+    },
+    "accents": {
+      "blue": "ブルー",
+      "sky": "スカイ",
+      "cyan": "シアン",
+      "teal": "ティール",
+      "emerald": "エメラルド",
+      "lime": "ライム",
+      "amber": "アンバー",
+      "orange": "オレンジ",
+      "red": "レッド",
+      "rose": "ローズ",
+      "fuchsia": "フクシア",
+      "purple": "パープル",
+      "violet": "バイオレット",
+      "indigo": "インディゴ",
+      "slate": "スレート",
+      "monochrome": "モノクロ"
     }
   }
 }
