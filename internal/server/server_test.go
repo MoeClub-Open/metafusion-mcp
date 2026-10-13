@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -34,6 +35,7 @@ func TestRequestedBusinessScopes(t *testing.T) {
 		{"omitted scopes offer minimal consent", "", []string{"mcp.read", "catalog.entity.edit"}, false},
 		{"wildcard cannot be delegated", "mcp.read *", nil, true},
 		{"management cannot be delegated", "mcp.read catalog.definitions.manage", nil, true},
+		{"import submit is dropped silently", "openid mcp.read catalog.import.submit", []string{"mcp.read"}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := requestedBusinessScopes(tc.raw)
@@ -231,5 +233,72 @@ func TestRedirectAndPKCEValidation(t *testing.T) {
 		if !validRedirect(r) {
 			t.Errorf("safe redirect rejected %s", r)
 		}
+	}
+}
+
+func TestMCPLandingPage(t *testing.T) {
+	s := New(testConfig("https://site.test"), &Store{})
+	h := s.Handler()
+	req := httptest.NewRequest("GET", "https://site.test/mcp", nil)
+	req.Header.Set("Accept", "text/html")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "MCP") || !strings.Contains(w.Header().Get("Content-Type"), "text/html") {
+		t.Fatalf("landing status=%d type=%q body=%q", w.Code, w.Header().Get("Content-Type"), w.Body.String())
+	}
+	api := httptest.NewRequest("GET", "https://site.test/mcp", nil)
+	api.Header.Set("Accept", "application/json")
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, api)
+	if w.Code != 401 || !strings.Contains(w.Body.String(), "no bearer token") {
+		t.Fatalf("api without bearer status=%d body=%q", w.Code, w.Body.String())
+	}
+}
+
+func TestProxyPublicOriginAssets(t *testing.T) {
+	// PublicURL is the internal gateway; browser hits a public hostname through the proxy.
+	s := New(testConfig("http://127.0.0.1:10100"), &Store{})
+	h := s.Handler()
+	req := httptest.NewRequest("GET", "http://mf-test.example/mcp/assets/app.js", nil)
+	req.Host = "mf-test.example"
+	req.Header.Set("X-Forwarded-Proto", "https")
+	req.Header.Set("Origin", "https://mf-test.example")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != 200 || !strings.Contains(w.Header().Get("Content-Type"), "javascript") {
+		t.Fatalf("asset with proxy Origin status=%d type=%q body=%q", w.Code, w.Header().Get("Content-Type"), w.Body.String())
+	}
+	evil := httptest.NewRequest("GET", "http://mf-test.example/mcp/assets/app.js", nil)
+	evil.Host = "mf-test.example"
+	evil.Header.Set("X-Forwarded-Proto", "https")
+	evil.Header.Set("Origin", "https://evil.example")
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, evil)
+	if w.Code != 403 || !strings.Contains(w.Body.String(), "origin_not_allowed") {
+		t.Fatalf("evil Origin status=%d body=%q", w.Code, w.Body.String())
+	}
+	// Manage mutating API must accept the proxy public Origin, not only MCP_PUBLIC_URL.
+	post := httptest.NewRequest("POST", "http://mf-test.example/mcp/manage/api/approve", strings.NewReader("{}"))
+	post.Host = "mf-test.example"
+	post.Header.Set("X-Forwarded-Proto", "https")
+	post.Header.Set("Origin", "https://mf-test.example")
+	post.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, post)
+	if w.Code == 403 && strings.Contains(w.Body.String(), "same_origin_required") {
+		t.Fatalf("proxy Origin rejected as same_origin_required: %q", w.Body.String())
+	}
+	if w.Code == 403 && strings.Contains(w.Body.String(), "origin_not_allowed") {
+		t.Fatalf("proxy Origin rejected as origin_not_allowed: %q", w.Body.String())
+	}
+}
+func TestFilterSupportedScopesDropsImport(t *testing.T) {
+	got := filterSupportedScopes([]string{"mcp.read", "catalog.import.submit", "catalog.entity.edit", "catalog.import.submit"})
+	want := []string{"mcp.read", "catalog.entity.edit"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v want %v", got, want)
+	}
+	if slices.Contains(supportedScopes, "catalog.import.submit") {
+		t.Fatal("catalog.import.submit must not remain in supportedScopes")
 	}
 }
