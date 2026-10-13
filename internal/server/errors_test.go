@@ -113,8 +113,8 @@ func validCommit() map[string]any {
 		"sources": []any{map[string]any{"kind": "url", "url": "https://example.com/a", "citation": "Label page", "key": "label"}},
 		"operations": []any{
 			map[string]any{"target": "entity", "action": "create", "ref": "rel1", "reviewed_candidate_ids": []any{}, "document": map[string]any{"kind": "release", "title": "rye", "work_id": uuid1, "external_ids": map[string]any{"vgmdb": "1"}, "attributes": map[string]any{"catalog_number": "TECI-1"}}, "source_refs": []any{map[string]any{"source": "label", "pointers": []any{"/attributes/catalog_number"}}}},
-			map[string]any{"target": "relation", "action": "create", "ref": "r", "document": map[string]any{"type": "edition_of", "source_id": map[string]any{"$ref": "rel1"}, "target_id": uuid1}},
-			map[string]any{"target": "entity", "action": "update", "id": uuid1, "base_version": 3, "patch": []any{map[string]any{"path": "/title", "value": "x"}, map[string]any{"path": "/attributes/old", "remove": true}}},
+			map[string]any{"target": "relation", "action": "create", "ref": "r", "document": map[string]any{"type": "edition_of", "source_id": map[string]any{"$ref": "rel1"}, "target_id": uuid1}, "source_refs": []any{map[string]any{"source": "label"}}},
+			map[string]any{"target": "entity", "action": "update", "id": uuid1, "base_version": 3, "patch": []any{map[string]any{"path": "/title", "value": "x"}, map[string]any{"path": "/attributes/old", "remove": true}}, "source_refs": []any{map[string]any{"source": "label", "pointers": []any{"/title"}}}},
 		},
 	}
 }
@@ -227,6 +227,50 @@ func TestSourceRefsSchemaShape(t *testing.T) {
 	for _, want := range []string{"/operations/0/source_refs", "/operations/2/source_refs/0/pointers/0", "/sources/0/key"} {
 		if !got[want] {
 			t.Error("missing", want, got)
+		}
+	}
+}
+
+func TestSourceRefsRequiredEverywhere(t *testing.T) {
+	schema := commitPrepareSchema()
+	c := validCommit()
+	delete(c["operations"].([]any)[1].(map[string]any), "source_refs")
+	delete(c["sources"].([]any)[0].(map[string]any), "key")
+	got := map[string]bool{}
+	for _, i := range validateSchema(schema, roundTrip(c)) {
+		got[i.Path] = true
+	}
+	for _, want := range []string{"/operations/1/source_refs", "/sources/0/key"} {
+		if !got[want] {
+			t.Error("missing required issue", want, got)
+		}
+	}
+}
+
+func TestSourceRefIssues(t *testing.T) {
+	if is := sourceRefIssues(roundTrip(validCommit()).(map[string]any)); len(is) != 0 {
+		t.Fatal("valid commit flagged", is)
+	}
+	c := validCommit()
+	c["sources"] = append(c["sources"].([]any),
+		map[string]any{"kind": "url", "url": "https://example.com/b", "citation": "Unused", "key": "unused"},
+		map[string]any{"kind": "url", "url": "https://example.com/c", "citation": "Dup", "key": "label"})
+	ops := c["operations"].([]any)
+	ops[1].(map[string]any)["source_refs"] = []any{map[string]any{"source": "nope"}}
+	ops[2].(map[string]any)["source_refs"] = []any{map[string]any{"source": "label"}, map[string]any{"source": "label"}}
+	got := map[string]string{}
+	for _, i := range sourceRefIssues(roundTrip(c).(map[string]any)) {
+		got[i.Path] = i.Message
+	}
+	want := map[string]string{
+		"/sources/2/key":                     "duplicate_source_key",
+		"/sources/1":                         "source_unused",
+		"/operations/1/source_refs/0/source": "unknown_source_ref",
+		"/operations/2/source_refs/1/source": "duplicate_source_ref",
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("%s: got %q want %q (all: %v)", k, got[k], v, got)
 		}
 	}
 }

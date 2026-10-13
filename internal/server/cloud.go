@@ -25,7 +25,7 @@ func newUUID() string {
 
 func (s *Server) addCloudTools() {
 	prepareSchema := commitPrepareSchema()
-	s.MCP.AddTool(&mcp.Tool{Name: "metafusion_commit_prepare", Description: "Seal a catalog commit in the cloud, generating its UUID and saving the exact immutable payload for 30 days. Requires edit_note, sources, operations (1-100: entity create {target:entity,action:create,ref,document,reviewed_candidate_ids}, relation create {target:relation,action:create,ref,document}, update {target,action:update,id,base_version,patch:[{path,value}|{path,remove:true}]}) and checkout definitions_etag. Use {\"$ref\":\"name\"} for IDs created earlier in the batch. Give each source a key and cite it per operation with source_refs [{source:key,pointers:[\"/attributes/catalog_number\"]}] so each revision records only its own evidence; preview returns warnings source_refs_missing / source_unused. Arguments are validated against this schema first; a 400 invalid_tool_arguments result lists every bad path. Use prepare once; retain its ID for preview, push and recovery.", InputSchema: prepareSchema}, func(ctx context.Context, r *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.MCP.AddTool(&mcp.Tool{Name: "metafusion_commit_prepare", Description: "Seal a catalog commit in the cloud, generating its UUID and saving the exact immutable payload for 30 days. Requires edit_note, sources (each with a unique key, every key cited by some operation), operations (1-100, every operation with source_refs:[{source:key,pointers?:[json-pointer]}]: entity create {target:entity,action:create,ref,document,reviewed_candidate_ids,source_refs}, relation create {target:relation,action:create,ref,document,source_refs}, update {target,action:update,id,base_version,patch:[{path,value}|{path,remove:true}],source_refs}) and checkout definitions_etag. Use {\"$ref\":\"name\"} for IDs created earlier in the batch. Each revision records only the sources its operation cites (e.g. source_refs [{source:key,pointers:[\"/attributes/catalog_number\"]}]). Prepare rejects broken evidence mapping with 400 invalid_source_refs (duplicate_source_key, unknown_source_ref, duplicate_source_ref, source_unused); the server additionally rejects source_refs_required, source_key_required and pointer mismatches. Arguments are validated against this schema first; a 400 invalid_tool_arguments result lists every bad path. Use prepare once; retain its ID for preview, push and recovery.", InputSchema: prepareSchema}, func(ctx context.Context, r *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		p, ok := currentPrincipal(ctx)
 		if !ok {
 			return toolError("authentication_required"), nil
@@ -42,6 +42,9 @@ func (s *Server) addCloudTools() {
 		body, bad := validateArgs(prepareSchema, r.Params.Arguments)
 		if bad != nil {
 			return bad, nil
+		}
+		if issues := sourceRefIssues(body); len(issues) > 0 {
+			return expectedError(400, "invalid_source_refs", "every source needs a unique key cited by some operation, and every operation must cite existing source keys", issues, nil), nil
 		}
 		id := newUUID()
 		body["id"] = id
