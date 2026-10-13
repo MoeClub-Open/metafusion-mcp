@@ -56,6 +56,7 @@ func currentPrincipal(ctx context.Context) (Principal, bool) {
 }
 func (s *Server) addTools() {
 	s.addCloudTools()
+	s.addGraphTool()
 	object := map[string]any{"type": "object", "additionalProperties": true}
 	apiSchema := map[string]any{"type": "object", "required": []string{"method", "path"}, "additionalProperties": false, "properties": map[string]any{
 		"method": map[string]any{"type": "string", "enum": []string{"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "get", "head", "post", "put", "patch", "delete"}}, "path": map[string]any{"type": "string", "pattern": "^/api/", "description": "Same-instance /api/... path. No host, query, fragment or internal endpoint."}, "query": object, "body": map[string]any{}, "headers": map[string]any{"type": "object", "additionalProperties": map[string]string{"type": "string"}}, "body_base64": map[string]string{"type": "string"}, "content_type": map[string]string{"type": "string"}, "multipart": map[string]any{"type": "array", "items": map[string]any{"type": "object", "required": []string{"name"}, "properties": map[string]any{"name": map[string]string{"type": "string"}, "filename": map[string]string{"type": "string"}, "text": map[string]string{"type": "string"}, "base64": map[string]string{"type": "string"}, "content_type": map[string]string{"type": "string"}}}}}}
@@ -70,7 +71,7 @@ func (s *Server) addTools() {
 		}
 		return s.callAPI(ctx, in), nil
 	})
-	s.MCP.AddTool(&mcp.Tool{Name: "metafusion_api_contract", Description: "Fetch the live catalog OpenAPI and operation schemas. Optional path/method selects an operation. Other service API documentation links are included. Read definitions before editing dynamic fields.", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"path": map[string]string{"type": "string"}, "method": map[string]string{"type": "string"}}}, Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.MCP.AddTool(&mcp.Tool{Name: "metafusion_api_contract", Description: "Fetch the live catalog API contract. Default mode=summary returns a compact index (path, method, short summary, request/response schema names). Pass path (+ optional method) for one operation with only the component schemas it references; mode=full returns the complete OpenAPI (~130 KB). Other service API documentation links are included. Read definitions before editing dynamic fields.", InputSchema: map[string]any{"type": "object", "additionalProperties": false, "properties": map[string]any{"path": map[string]string{"type": "string"}, "method": map[string]string{"type": "string"}, "mode": map[string]any{"type": "string", "enum": []string{"summary", "full"}}, "summary_chars": map[string]any{"type": "integer", "minimum": 0, "maximum": 2000, "description": "Summary truncation length in summary mode (default 160)"}}}, Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return s.contract(ctx, req.Params.Arguments), nil
 	})
 	shortcuts := []struct {
@@ -346,11 +347,13 @@ func (s *Server) callAPI(ctx context.Context, in APIInput) *mcp.CallToolResult {
 }
 func (s *Server) contract(ctx context.Context, args json.RawMessage) *mcp.CallToolResult {
 	var in struct {
-		Path   string `json:"path"`
-		Method string `json:"method"`
+		Path         string `json:"path"`
+		Method       string `json:"method"`
+		Mode         string `json:"mode"`
+		SummaryChars *int   `json:"summary_chars"`
 	}
-	if json.Unmarshal(args, &in) != nil {
-		return toolError("invalid_arguments")
+	if len(args) > 0 && json.Unmarshal(args, &in) != nil {
+		return expectedError(400, "invalid_tool_arguments", "arguments must be an object", nil, nil)
 	}
 	status, b, e := s.request(ctx, "GET", s.Config.APIURL+"/api/openapi.json", "", "", nil)
 	if e != nil || status != 200 {
@@ -360,21 +363,125 @@ func (s *Server) contract(ctx context.Context, args json.RawMessage) *mcp.CallTo
 	if json.Unmarshal(b, &doc) != nil {
 		return toolError("invalid_contract")
 	}
+	docs := map[string]string{"community": s.Config.PublicURL + "/docs/api-community", "storage": s.Config.PublicURL + "/docs/api-storage", "authentication": s.Config.PublicURL + "/docs/api-auth", "commits": s.Config.PublicURL + "/docs/api-commits"}
+	components, _ := doc["components"].(map[string]any)
+	schemas, _ := components["schemas"].(map[string]any)
 	if in.Path != "" {
 		paths, _ := doc["paths"].(map[string]any)
 		key := strings.TrimPrefix(in.Path, "/api")
 		op, ok := paths[key]
 		if !ok {
-			return toolError("operation_not_found")
+			return expectedError(404, "operation_not_found", "no such path in the catalog contract; call without path for the index", nil, nil)
 		}
 		if in.Method != "" {
 			m, _ := op.(map[string]any)
 			op, ok = m[strings.ToLower(in.Method)]
 			if !ok {
-				return toolError("operation_not_found")
+				return expectedError(404, "operation_not_found", "no such method on this path", nil, nil)
 			}
 		}
-		doc = map[string]any{"operation": op, "components": doc["components"]}
+		return result(map[string]any{"ok": true, "mode": "operation", "path": in.Path, "operation": op, "schemas": referencedSchemas(op, schemas), "documentation": docs}, false)
 	}
-	return result(map[string]any{"catalog": doc, "documentation": map[string]string{"community": s.Config.PublicURL + "/docs/api-community", "storage": s.Config.PublicURL + "/docs/api-storage", "authentication": s.Config.PublicURL + "/docs/api-auth", "commits": s.Config.PublicURL + "/docs/api-commits"}}, false)
+	if in.Mode == "full" {
+		return result(map[string]any{"ok": true, "mode": "full", "catalog": doc, "documentation": docs}, false)
+	}
+	limit := 160
+	if in.SummaryChars != nil {
+		limit = *in.SummaryChars
+	}
+	return result(map[string]any{"ok": true, "mode": "summary", "info": doc["info"], "operations": contractIndex(doc, limit), "schema_names": sortedKeys(schemas), "hint": "Call again with path (+method) for one operation and its schemas, or mode=full for the whole OpenAPI.", "documentation": docs}, false)
+}
+
+func sortedKeys(m map[string]any) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	slices.Sort(out)
+	return out
+}
+
+func schemaName(v any) string {
+	m, _ := v.(map[string]any)
+	if r, ok := m["$ref"].(string); ok {
+		return strings.TrimPrefix(r, "#/components/schemas/")
+	}
+	if items, ok := m["items"]; ok {
+		if n := schemaName(items); n != "" {
+			return n + "[]"
+		}
+	}
+	return ""
+}
+
+func contentSchema(v any) string {
+	m, _ := v.(map[string]any)
+	c, _ := m["content"].(map[string]any)
+	for _, ct := range []string{"application/json", "multipart/form-data"} {
+		if j, ok := c[ct].(map[string]any); ok {
+			return schemaName(j["schema"])
+		}
+	}
+	return ""
+}
+
+func contractIndex(doc map[string]any, limit int) []map[string]any {
+	paths, _ := doc["paths"].(map[string]any)
+	var out []map[string]any
+	for _, p := range sortedKeys(paths) {
+		methods, _ := paths[p].(map[string]any)
+		for _, m := range sortedKeys(methods) {
+			op, ok := methods[m].(map[string]any)
+			if !ok {
+				continue
+			}
+			sum, _ := op["summary"].(string)
+			if r := []rune(sum); len(r) > limit {
+				sum = string(r[:limit]) + "…"
+			}
+			item := map[string]any{"method": strings.ToUpper(m), "path": "/api" + p, "summary": sum}
+			if n := contentSchema(op["requestBody"]); n != "" {
+				item["request"] = n
+			}
+			if resp, ok := op["responses"].(map[string]any); ok {
+				for _, code := range []string{"200", "201", "202"} {
+					if n := contentSchema(resp[code]); n != "" {
+						item["response"] = n
+						break
+					}
+				}
+			}
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+// referencedSchemas returns the transitive closure of component schemas used by v.
+func referencedSchemas(v any, schemas map[string]any) map[string]any {
+	out := map[string]any{}
+	var walk func(any)
+	walk = func(v any) {
+		switch x := v.(type) {
+		case map[string]any:
+			if r, ok := x["$ref"].(string); ok && strings.HasPrefix(r, "#/components/schemas/") {
+				name := strings.TrimPrefix(r, "#/components/schemas/")
+				if _, done := out[name]; !done {
+					if sc, ok := schemas[name]; ok {
+						out[name] = sc
+						walk(sc)
+					}
+				}
+			}
+			for _, c := range x {
+				walk(c)
+			}
+		case []any:
+			for _, c := range x {
+				walk(c)
+			}
+		}
+	}
+	walk(v)
+	return out
 }

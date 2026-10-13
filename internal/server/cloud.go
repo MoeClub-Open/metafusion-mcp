@@ -56,7 +56,7 @@ func (s *Server) addCloudTools() {
 		}
 		return result(map[string]any{"ok": true, "id": id, "commit": body, "expires_in_days": 30, "applied": false}, false), nil
 	})
-	s.MCP.AddTool(&mcp.Tool{Name: "metafusion_commit", Description: "Use a saved cloud commit by ID. get returns the exact sealed payload; preview validates; push sends it once; recover queries the upstream receipt without replaying a write. Owner-scoped. Conflicts require a new rebased commit; unknown outcomes require recover first.", InputSchema: map[string]any{"type": "object", "required": []string{"id", "action"}, "properties": map[string]any{"id": map[string]string{"type": "string"}, "action": map[string]any{"type": "string", "enum": []string{"get", "preview", "push", "recover"}}}}}, func(ctx context.Context, r *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.MCP.AddTool(&mcp.Tool{Name: "metafusion_commit", Description: "Use a saved cloud commit by ID. get returns the exact sealed payload; diff summarizes each operation (target, entity, changed fields, old -> new read from the current upstream entity, base_version staleness) without writing; preview validates; push sends it once; recover queries the upstream receipt without replaying a write. Owner-scoped. Conflicts require a new rebased commit; unknown outcomes require recover first.", InputSchema: map[string]any{"type": "object", "required": []string{"id", "action"}, "properties": map[string]any{"id": map[string]string{"type": "string"}, "action": map[string]any{"type": "string", "enum": []string{"get", "diff", "preview", "push", "recover"}}}}}, func(ctx context.Context, r *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		p, ok := currentPrincipal(ctx)
 		if !ok {
 			return toolError("authentication_required"), nil
@@ -84,6 +84,8 @@ func (s *Server) addCloudTools() {
 		switch in.Action {
 		case "get":
 			return result(map[string]any{"ok": true, "commit": body}, false), nil
+		case "diff":
+			return s.commitDiff(ctx, body), nil
 		case "preview":
 			return s.callAPI(ctx, APIInput{Method: "POST", Path: "/api/catalog/commits/preview", Body: body}), nil
 		case "push":
@@ -91,7 +93,7 @@ func (s *Server) addCloudTools() {
 		case "recover":
 			return s.callAPI(ctx, APIInput{Method: "GET", Path: "/api/catalog/commits/" + in.ID}), nil
 		default:
-			return expectedError(400, "invalid_action", "action must be get, preview, push or recover", nil, nil), nil
+			return expectedError(400, "invalid_action", "action must be get, diff, preview, push or recover", nil, nil), nil
 		}
 	})
 	s.addFileTools()
