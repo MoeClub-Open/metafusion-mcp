@@ -98,13 +98,13 @@ func TestReadOnlyAndCredentialIsolation(t *testing.T) {
 	defer up.Close()
 	s := New(testConfig(up.URL), nil)
 	readonly := principalContext(Principal{Grant: Grant{UserID: "u", Scopes: []string{"mcp.read"}}})
-	if !s.callAPI(readonly, APIInput{Method: "POST", Path: "/api/catalog/entities", Body: map[string]any{"title": "x"}}).IsError || hits.Load() != 0 {
+	if !failedResult(s.callAPI(readonly, APIInput{Method: "POST", Path: "/api/catalog/entities", Body: map[string]any{"title": "x"}})) || hits.Load() != 0 {
 		t.Fatal("read-only grant performed mutation")
 	}
 	ctx := principalContext(Principal{Grant: Grant{UserID: "u", Scopes: []string{"catalog.entity.edit"}}, PAT: "mfp_private"})
 	res := s.callAPI(ctx, APIInput{Method: "PUT", Path: "/api/catalog/entities/123", Body: map[string]any{"expected_version": 1}})
 	data := res.StructuredContent.(map[string]any)
-	if data["status"] != 409 || !res.IsError || hits.Load() != 1 {
+	if data["status"] != 409 || res.IsError || data["ok"] != false || data["error"] != "version_conflict" || hits.Load() != 1 {
 		t.Fatal("conflict changed/replayed")
 	}
 	if strings.Contains(mustJSON(data), "mfp_private") {

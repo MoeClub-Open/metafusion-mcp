@@ -314,7 +314,7 @@ func TestPostgresOAuthToRemoteMCP(t *testing.T) {
 		t.Fatal("read-only search failed", e)
 	}
 	res, e = readSession.CallTool(ctx, &mcp.CallToolParams{Name: "metafusion_api_call", Arguments: map[string]any{"method": "POST", "path": "/api/catalog/entities", "body": map[string]string{"title": "must not write"}}})
-	if e != nil || !res.IsError || writes.Load() != 1 {
+	if e != nil || !failedResult(res) || writes.Load() != 1 {
 		t.Fatal("read-only grant authorized an upstream write", e)
 	}
 }

@@ -132,7 +132,7 @@ func loadFile(ctx context.Context, in fileInput) (*os.File, string, int64, error
 }
 func dataObject(r *mcp.CallToolResult) (map[string]any, bool) {
 	m, ok := r.StructuredContent.(map[string]any)
-	if !ok || r.IsError {
+	if !ok || failedResult(r) {
 		return nil, false
 	}
 	v, ok := m["data"].(map[string]any)
@@ -203,7 +203,7 @@ func (s *Server) upload(ctx context.Context, in fileInput) *mcp.CallToolResult {
 	initial := s.callAPI(ctx, APIInput{Method: "POST", Path: "/api/storage/upload/initiate", Body: map[string]any{"file_name": in.FileName, "file_size": size, "sha256_hash": digest, "mime_type": in.MIME, "part_count": parts, "target_entity_id": in.TargetID, "binding_role": in.BindingRole}})
 	data, ok := dataObject(initial)
 	if !ok {
-		return result(map[string]any{"sha256": digest, "size": size, "response": initial.StructuredContent, "retry_automatically": false}, initial.IsError)
+		return result(map[string]any{"ok": false, "sha256": digest, "size": size, "response": initial.StructuredContent, "retry_automatically": false}, initial.IsError)
 	}
 	id, _ := data["asset_id"].(string)
 	if instant, _ := data["is_instant_upload"].(bool); instant {
@@ -271,8 +271,8 @@ func (s *Server) upload(ctx context.Context, in fileInput) *mcp.CallToolResult {
 		}
 	}
 	out := s.callAPI(ctx, APIInput{Method: "POST", Path: "/api/storage/upload/complete", Body: map[string]any{"asset_id": id, "upload_id": data["upload_id"], "parts": completed}})
-	if out.IsError {
-		return result(map[string]any{"asset_id": id, "sha256": digest, "response": out.StructuredContent, "retry_automatically": false}, true)
+	if failedResult(out) {
+		return result(map[string]any{"ok": false, "asset_id": id, "sha256": digest, "response": out.StructuredContent, "retry_automatically": false}, out.IsError)
 	}
-	return result(map[string]any{"asset_id": id, "sha256": digest, "size": size, "response": out.StructuredContent}, false)
+	return result(map[string]any{"ok": true, "asset_id": id, "sha256": digest, "size": size, "response": out.StructuredContent}, false)
 }

@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
-	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -25,41 +24,37 @@ func newUUID() string {
 }
 
 func (s *Server) addCloudTools() {
-	object := map[string]any{"type": "object", "additionalProperties": true}
-	s.MCP.AddTool(&mcp.Tool{Name: "metafusion_commit_prepare", Description: "Seal a catalog commit in the cloud, generating its UUID and saving the exact immutable payload for 30 days. Requires edit_note, sources, operations and checkout definitions_etag. No local files, shell or runtime needed. Use prepare once; retain its ID for preview, push and recovery.", InputSchema: object}, func(ctx context.Context, r *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	prepareSchema := commitPrepareSchema()
+	s.MCP.AddTool(&mcp.Tool{Name: "metafusion_commit_prepare", Description: "Seal a catalog commit in the cloud, generating its UUID and saving the exact immutable payload for 30 days. Requires edit_note, sources, operations (1-100: entity create {target:entity,action:create,ref,document,reviewed_candidate_ids}, relation create {target:relation,action:create,ref,document}, update {target,action:update,id,base_version,patch:[{path,value}|{path,remove:true}]}) and checkout definitions_etag. Use {\"$ref\":\"name\"} for IDs created earlier in the batch. Arguments are validated against this schema first; a 400 invalid_tool_arguments result lists every bad path. Use prepare once; retain its ID for preview, push and recovery.", InputSchema: prepareSchema}, func(ctx context.Context, r *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		p, ok := currentPrincipal(ctx)
 		if !ok {
 			return toolError("authentication_required"), nil
 		}
 		if !s.limiter.AllowAPI(p, "POST", "/mcp/drafts") {
-			return toolError("rate_limited"), nil
+			return expectedError(429, "rate_limited", "MCP rate limit exhausted", nil, 60), nil
 		}
-		var body map[string]any
-		if json.Unmarshal(r.Params.Arguments, &body) != nil {
-			return toolError("invalid_arguments"), nil
+		var probe map[string]any
+		if json.Unmarshal(r.Params.Arguments, &probe) == nil {
+			if _, ok := probe["id"]; ok {
+				return expectedError(400, "id_is_generated_by_prepare", "omit id; prepare generates the commit UUID", []schemaIssue{{Path: "/id", Message: "must be omitted"}}, nil), nil
+			}
 		}
-		if _, ok := body["id"]; ok {
-			return toolError("id_is_generated_by_prepare"), nil
-		}
-		ops, ok := body["operations"].([]any)
-		note, _ := body["edit_note"].(string)
-		etag, _ := body["definitions_etag"].(string)
-		sources, _ := body["sources"].([]any)
-		if !ok || len(ops) == 0 || len(ops) > 100 || strings.TrimSpace(note) == "" || etag == "" || len(sources) == 0 {
-			return toolError("invalid_commit"), nil
+		body, bad := validateArgs(prepareSchema, r.Params.Arguments)
+		if bad != nil {
+			return bad, nil
 		}
 		id := newUUID()
 		body["id"] = id
 		raw, _ := json.Marshal(body)
 		if len(raw) > 2<<20 {
-			return toolError("commit_too_large"), nil
+			return expectedError(413, "commit_too_large", "sealed commit exceeds 2 MiB", nil, nil), nil
 		}
 		// Saving a workspace is not publishing catalog data; upstream preview checks the complete contract.
 		_, e := s.Store.DB.ExecContext(ctx, "INSERT INTO mcp.drafts(id,user_id,payload) VALUES($1,$2,$3)", id, p.Grant.UserID, string(raw))
 		if e != nil {
 			return toolError("draft_unavailable"), nil
 		}
-		return result(map[string]any{"id": id, "commit": body, "expires_in_days": 30, "applied": false}, false), nil
+		return result(map[string]any{"ok": true, "id": id, "commit": body, "expires_in_days": 30, "applied": false}, false), nil
 	})
 	s.MCP.AddTool(&mcp.Tool{Name: "metafusion_commit", Description: "Use a saved cloud commit by ID. get returns the exact sealed payload; preview validates; push sends it once; recover queries the upstream receipt without replaying a write. Owner-scoped. Conflicts require a new rebased commit; unknown outcomes require recover first.", InputSchema: map[string]any{"type": "object", "required": []string{"id", "action"}, "properties": map[string]any{"id": map[string]string{"type": "string"}, "action": map[string]any{"type": "string", "enum": []string{"get", "preview", "push", "recover"}}}}}, func(ctx context.Context, r *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		p, ok := currentPrincipal(ctx)
@@ -74,12 +69,12 @@ func (s *Server) addCloudTools() {
 			return toolError("invalid_arguments"), nil
 		}
 		if !uuidPattern.MatchString(in.ID) {
-			return toolError("invalid_id"), nil
+			return expectedError(400, "invalid_id", "id must be a UUID", nil, nil), nil
 		}
 		var raw []byte
 		e := s.Store.DB.QueryRowContext(ctx, "SELECT payload FROM mcp.drafts WHERE id=$1 AND user_id=$2 AND expires_at>now()", in.ID, p.Grant.UserID).Scan(&raw)
 		if e == sql.ErrNoRows {
-			return toolError("draft_not_found"), nil
+			return expectedError(404, "draft_not_found", "no unexpired cloud commit with this id for the current user", nil, nil), nil
 		}
 		if e != nil {
 			return toolError("draft_unavailable"), nil
@@ -88,7 +83,7 @@ func (s *Server) addCloudTools() {
 		_ = json.Unmarshal(raw, &body)
 		switch in.Action {
 		case "get":
-			return result(map[string]any{"commit": body}, false), nil
+			return result(map[string]any{"ok": true, "commit": body}, false), nil
 		case "preview":
 			return s.callAPI(ctx, APIInput{Method: "POST", Path: "/api/catalog/commits/preview", Body: body}), nil
 		case "push":
@@ -96,7 +91,7 @@ func (s *Server) addCloudTools() {
 		case "recover":
 			return s.callAPI(ctx, APIInput{Method: "GET", Path: "/api/catalog/commits/" + in.ID}), nil
 		default:
-			return toolError("invalid_action"), nil
+			return expectedError(400, "invalid_action", "action must be get, preview, push or recover", nil, nil), nil
 		}
 	})
 	s.addFileTools()
