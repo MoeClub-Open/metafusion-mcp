@@ -1,25 +1,46 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme-mode="dark" data-theme-accent="blue" data-theme-tone="neutral" class="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0b0f17">
   <title>MetaFusion MCP</title>
+  <link rel="stylesheet" href="/mcp/assets/theme.css">
   <link rel="stylesheet" href="/mcp/assets/style.css">
   <script type="module" src="/mcp/assets/app.js"></script>
 </head>
 <body>
-  <main>
-    <header>
-      <a href="/" class="brand">MetaFusion</a>
-      <select id="language" aria-label="Language">
-        <option value="zh-CN">简体中文</option>
-        <option value="en-US">English</option>
-        <option value="zh-TW">繁體中文</option>
-        <option value="ja-JP">日本語</option>
-      </select>
-    </header>
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a href="/" class="brand" aria-label="MetaFusion">
+        <svg class="brand-mark" width="28" height="28" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+          <path d="M9 2H23L30 9V23L23 30H9L2 23V9L9 2Z" fill="none" stroke="currentColor" stroke-opacity="0.16" stroke-width="1.05"/>
+          <path d="M10.85 21.55L13.28 9.85L16 16.35L18.72 9.85L21.15 21.55" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>MetaFusion</span>
+      </a>
+      <nav class="site-nav" aria-label="Primary">
+        <a href="/home" data-i18n="navHome"></a>
+        <a href="/docs/api-mcp" data-i18n="docs"></a>
+        <a href="/mcp/manage" data-i18n="navManage"></a>
+      </nav>
+      <div class="site-tools">
+        <div class="theme-controls" role="group" aria-label="Theme">
+          <button type="button" id="themeMode" class="icon-btn" title="Theme mode" aria-label="Theme mode">◐</button>
+          <select id="themeAccent" aria-label="Accent color"></select>
+        </div>
+        <select id="language" aria-label="Language">
+          <option value="zh-CN">简体中文</option>
+          <option value="en-US">English</option>
+          <option value="zh-TW">繁體中文</option>
+          <option value="ja-JP">日本語</option>
+        </select>
+      </div>
+    </div>
+  </header>
 
-    <section id="landing" hidden>
+  <main>
+    <section id="landing" class="panel" hidden>
       <h1 data-i18n="landingTitle"></h1>
       <p data-i18n="landingIntro"></p>
       <div class="buttons">
@@ -29,7 +50,7 @@
       <p class="meta" data-i18n="landingHint"></p>
     </section>
 
-    <section id="manageShell" hidden>
+    <section id="manageShell" class="panel" hidden>
       <h1 data-i18n="manageTitle"></h1>
       <p data-i18n="manageIntro"></p>
       <div id="notice" role="status" aria-live="polite"></div>
@@ -50,14 +71,13 @@
           <p id="client"></p>
           <p class="warning" data-i18n="unverified"></p>
           <p id="callback" class="meta"></p>
+          <div class="select-all-bar">
+            <label class="select-all">
+              <input type="checkbox" id="selectAllScopes">
+              <span data-i18n="selectAll"></span>
+            </label>
+          </div>
           <div id="scopes" class="scope-groups"></div>
-          <fieldset class="expiry">
-            <legend data-i18n="expiry"></legend>
-            <label class="chip"><input type="radio" name="days" value="7" checked> <span data-i18n="expiry7"></span></label>
-            <label class="chip"><input type="radio" name="days" value="30"> <span data-i18n="expiry30"></span></label>
-            <label class="chip"><input type="radio" name="days" value="custom"> <span data-i18n="expiryCustom"></span></label>
-            <input id="daysCustom" type="number" min="1" max="30" value="14" hidden>
-          </fieldset>
           <div class="buttons">
             <button id="approve" data-i18n="approve"></button>
             <button id="deny" class="secondary" data-i18n="deny"></button>
@@ -68,10 +88,10 @@
         <div id="grants"></div>
       </section>
     </section>
-
-    <footer>
-      <a href="/docs/api-mcp" data-i18n="docs"></a>
-    </footer>
   </main>
+
+  <footer class="site-footer">
+    <a href="/docs/api-mcp" data-i18n="docs"></a>
+  </footer>
 </body>
 </html>

@@ -8,7 +8,6 @@ import (
 	"regexp"
 	"slices"
 	"strings"
-	"time"
 )
 
 var pkcePattern = regexp.MustCompile(`^[A-Za-z0-9_-]{43}$`)
@@ -158,7 +157,7 @@ func (s *Server) authorizationInfo(w http.ResponseWriter, r *http.Request) {
 	existing := []string{}
 	if grants, err := s.Store.Grants(r.Context(), u.ID); err == nil {
 		for _, g := range grants {
-			if g.ClientID == a.Client.ID && g.Revoked == nil && g.Expires.After(time.Now()) {
+			if g.ClientID == a.Client.ID && g.Revoked == nil {
 				existing = filterSupportedScopes(g.Scopes)
 				break
 			}
@@ -175,10 +174,9 @@ func (s *Server) approve(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Request string   `json:"request"`
 		Scopes  []string `json:"scopes"`
-		Days    int      `json:"expires_in_days"`
 		Allow   bool     `json:"allow"`
 	}
-	if decode(r, &in) != nil || len(in.Request) > 8192 || in.Days < 1 || in.Days > 30 {
+	if decode(r, &in) != nil || len(in.Request) > 8192 {
 		writeError(w, 400, "invalid_request")
 		return
 	}
@@ -211,8 +209,8 @@ func (s *Server) approve(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	g := Grant{ID: randomToken(), UserID: u.ID, ClientID: a.Client.ID, Scopes: in.Scopes, Expires: time.Now().Add(time.Duration(in.Days) * 24 * time.Hour)}
-	id, pat, e := s.mintPAT(r.Context(), cookie, a.Client.Name, in.Scopes, in.Days)
+	g := Grant{ID: randomToken(), UserID: u.ID, ClientID: a.Client.ID, Scopes: in.Scopes}
+	id, pat, e := s.mintPAT(r.Context(), cookie, a.Client.Name, in.Scopes)
 	if e != nil {
 		writeError(w, 503, "pat_creation_failed")
 		return
@@ -280,11 +278,7 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	expires := 900
-	if left := int(time.Until(g.Expires).Seconds()); left < expires {
-		expires = left
-	}
-	writeJSON(w, 200, map[string]any{"access_token": access, "refresh_token": refresh, "token_type": "Bearer", "expires_in": expires, "scope": strings.Join(g.Scopes, " ")})
+	writeJSON(w, 200, map[string]any{"access_token": access, "refresh_token": refresh, "token_type": "Bearer", "expires_in": 900, "scope": strings.Join(g.Scopes, " ")})
 }
 func (s *Server) revokeToken(w http.ResponseWriter, r *http.Request) {
 	if r.ParseForm() != nil {

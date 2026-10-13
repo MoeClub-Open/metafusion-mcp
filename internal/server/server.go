@@ -232,7 +232,19 @@ func (s *Server) verify(ctx context.Context, token string, r *http.Request) (*au
 		}
 		groups = current.Groups
 	}
-	return &auth.TokenInfo{UserID: g.UserID, Scopes: g.Scopes, Expiration: g.Expires, Extra: map[string]any{"principal": Principal{Grant: g, PAT: pat, Groups: groups}}}, nil
+	exp, ok := bearerExpiration(g)
+	if !ok {
+		return nil, auth.ErrInvalidToken
+	}
+	return &auth.TokenInfo{UserID: g.UserID, Scopes: g.Scopes, Expiration: exp, Extra: map[string]any{"principal": Principal{Grant: g, PAT: pat, Groups: groups}}}, nil
+}
+// bearerExpiration is TokenInfo.Expiration for Bearer verify: short access TTL only.
+// Never use grant.Expires (grants are open-ended until revoked).
+func bearerExpiration(g Grant) (time.Time, bool) {
+	if g.AccessExpires.IsZero() {
+		return time.Time{}, false
+	}
+	return g.AccessExpires, true
 }
 func (s *Server) introspect(ctx context.Context, user, pat string) (cachedPrincipal, error) {
 	key := hash(pat)
@@ -320,14 +332,16 @@ func (s *Server) grants(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, 200, map[string]any{"items": g})
 }
-func (s *Server) mintPAT(ctx context.Context, cookie, name string, scopes []string, days int) (string, string, error) {
+func (s *Server) mintPAT(ctx context.Context, cookie, name string, scopes []string) (string, string, error) {
 	permissions := []string{"mcp.connect"}
 	for _, scope := range scopes {
 		if scope != "mcp.read" {
 			permissions = append(permissions, scope)
 		}
 	}
-	status, b, e := s.request(ctx, "POST", s.Config.AuthURL+"/api/auth/tokens", cookie, "", map[string]any{"name": "MCP: " + name, "scopes": permissions, "expires_in_days": days})
+	// Omit expires_in_days: metafusion-auth treats missing/0 as never-expiring PAT,
+	// matching MCP grants that stay valid until the user revokes them.
+	status, b, e := s.request(ctx, "POST", s.Config.AuthURL+"/api/auth/tokens", cookie, "", map[string]any{"name": "MCP: " + name, "scopes": permissions})
 	if e != nil || status != 201 {
 		return "", "", errors.New("pat_creation_failed")
 	}
@@ -403,7 +417,7 @@ func (s *Server) updateGrant(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
-	if g == nil || g.Revoked != nil || !g.Expires.After(time.Now()) {
+	if g == nil || g.Revoked != nil {
 		writeError(w, 404, "not_found")
 		return
 	}
@@ -417,8 +431,7 @@ func (s *Server) updateGrant(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	days := int(time.Until(g.Expires).Hours()/24) + 1
-	id, pat, e := s.mintPAT(r.Context(), cookie, g.ClientName, in.Scopes, days)
+	id, pat, e := s.mintPAT(r.Context(), cookie, g.ClientName, in.Scopes)
 	if e != nil {
 		writeError(w, 503, "pat_creation_failed")
 		return

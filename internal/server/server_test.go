@@ -302,3 +302,33 @@ func TestFilterSupportedScopesDropsImport(t *testing.T) {
 		t.Fatal("catalog.import.submit must not remain in supportedScopes")
 	}
 }
+
+func TestBearerExpirationUsesAccessTTL(t *testing.T) {
+	// TokenInfo.Expiration must follow short access TTL, never grant.expires_at.
+	// Zero Expiration makes go-sdk RequireBearerToken return 401 "token missing expiration".
+	accessExp := time.Now().UTC().Add(15 * time.Minute)
+	grantExp := time.Now().UTC().Add(30 * 24 * time.Hour)
+	cases := []struct {
+		name    string
+		g       Grant
+		wantOK  bool
+		wantExp time.Time
+	}{
+		{"access set, grant nil", Grant{AccessExpires: accessExp}, true, accessExp},
+		{"access set, grant also set — still access", Grant{AccessExpires: accessExp, Expires: &grantExp}, true, accessExp},
+		{"access zero, grant set — reject (do not fall back)", Grant{Expires: &grantExp}, false, time.Time{}},
+		{"both zero — reject", Grant{}, false, time.Time{}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			exp, ok := bearerExpiration(tc.g)
+			if ok != tc.wantOK {
+				t.Fatalf("ok=%v want %v", ok, tc.wantOK)
+			}
+			if ok && !exp.Equal(tc.wantExp) {
+				t.Fatalf("exp %v want %v", exp, tc.wantExp)
+			}
+		})
+	}
+}
+
