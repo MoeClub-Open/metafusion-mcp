@@ -1,0 +1,220 @@
+package server
+
+import (
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync/atomic"
+	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+)
+
+const (
+	gWork    = "00000000-0000-4000-8000-000000000001"
+	gRelease = "00000000-0000-4000-8000-000000000002"
+	gMedium  = "00000000-0000-4000-8000-000000000003"
+	gTrack   = "00000000-0000-4000-8000-000000000004"
+	gOther   = "00000000-0000-4000-8000-000000000005"
+)
+
+// fakeGraph: work -ownership-> (via release.work_id) release -> medium -> track,
+// plus a semantic relation release -> other. The release has 150 links so its
+// page needs a second request.
+func fakeGraph(t *testing.T, queries *atomic.Int32) *httptest.Server {
+	link := func(key, class, src, dst string) map[string]any {
+		return map[string]any{"key": key, "rule_code": "structure:x", "class": class, "source_id": src, "target_id": dst}
+	}
+	adj := map[string][]map[string]any{
+		gWork:    {link("w-r", "ownership", gWork, gRelease)},
+		gRelease: {link("w-r", "ownership", gWork, gRelease), link("r-m", "ownership", gRelease, gMedium), link("rel-1", "semantic", gRelease, gOther)},
+		gMedium:  {link("r-m", "ownership", gRelease, gMedium), link("m-t", "ownership", gMedium, gTrack)},
+		gTrack:   {link("m-t", "ownership", gMedium, gTrack)},
+		gOther:   {},
+	}
+	for i := 0; i < 150; i++ {
+		adj[gRelease] = append(adj[gRelease], link("pad-"+string(rune('a'+i%26))+strings.Repeat("x", i/26), "reference", gRelease, gOther))
+	}
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/catalog/relationships/query":
+			queries.Add(1)
+			var body struct {
+				IDs    []string `json:"ids"`
+				Limit  int      `json:"limit"`
+				Offset int      `json:"offset"`
+			}
+			b, _ := io.ReadAll(r.Body)
+			json.Unmarshal(b, &body)
+			if len(body.IDs) > 20 {
+				writeJSON(w, 400, map[string]any{"error": "invalid_ids"})
+				return
+			}
+			var pages []any
+			var un []string
+			for _, id := range body.IDs {
+				items, ok := adj[id]
+				if !ok {
+					un = append(un, id)
+					continue
+				}
+				end := min(body.Offset+body.Limit, len(items))
+				page := []map[string]any{}
+				if body.Offset < len(items) {
+					page = items[body.Offset:end]
+				}
+				pages = append(pages, map[string]any{"subject_id": id, "items": page, "limit": body.Limit, "offset": body.Offset, "has_more": end < len(items)})
+			}
+			writeJSON(w, 200, map[string]any{"definition_etag": "e1", "pages": pages, "entities": map[string]any{gWork: map[string]any{"kind": "work"}}, "unavailable_ids": un})
+		case strings.HasSuffix(r.URL.Path, "/relations"):
+			items := []any{}
+			if strings.Contains(r.URL.Path, gRelease) {
+				items = append(items, map[string]any{"id": "rel-1", "type": "edition_of", "source_id": gRelease, "target_id": gOther})
+			}
+			writeJSON(w, 200, map[string]any{"items": items, "entities": map[string]any{}})
+		default:
+			writeJSON(w, 404, map[string]any{"error": "not_found"})
+		}
+	}))
+}
+
+func TestGraphReadPaginatesMergesAndTraverses(t *testing.T) {
+	var queries atomic.Int32
+	up := fakeGraph(t, &queries)
+	defer up.Close()
+	s := New(testConfig(up.URL), nil)
+	ctx := principalContext(Principal{PAT: "mfp_x", Grant: Grant{UserID: "u", Scopes: []string{"mcp.read"}}})
+	r := s.graphRead(ctx, graphInput{IDs: []string{gWork}, Depth: 3})
+	m := structured(t, r)
+	if m["complete"] != true {
+		t.Fatal("expected complete", m["incomplete_reasons"], m["errors"])
+	}
+	visited := m["visited"].(map[string]any)
+	if visited[gTrack] != float64(3) {
+		t.Fatal("did not reach track at depth 3", visited)
+	}
+	edges := m["edges"].([]any)
+	var sem map[string]any
+	for _, e := range edges {
+		if e.(map[string]any)["key"] == "rel-1" {
+			sem = e.(map[string]any)
+		}
+	}
+	if sem == nil || sem["category"] != "semantic" || sem["relation"] == nil || len(sem["origins"].([]any)) != 2 {
+		t.Fatal("semantic edge not merged", sem)
+	}
+	counts := m["edge_counts"].(map[string]any)
+	if counts["structural"] != float64(3) || counts["reference"] != float64(150) {
+		t.Fatal("dedupe/pagination wrong", counts)
+	}
+	r = s.graphRead(ctx, graphInput{IDs: []string{gRelease}, Depth: 1})
+	if m = structured(t, r); m["complete"] != true || m["edge_counts"].(map[string]any)["reference"] != float64(150) {
+		t.Fatal("depth 1 release", m["incomplete_reasons"])
+	}
+}
+
+func TestGraphReadBatchesAndReportsTruncation(t *testing.T) {
+	var queries atomic.Int32
+	up := fakeGraph(t, &queries)
+	defer up.Close()
+	s := New(testConfig(up.URL), nil)
+	ctx := principalContext(Principal{PAT: "mfp_x", Grant: Grant{UserID: "u", Scopes: []string{"mcp.read"}}})
+	ids := []string{gWork}
+	for i := 0; i < 25; i++ {
+		ids = append(ids, strings.Replace("00000000-0000-4000-8000-0000000001xx", "xx", string(rune('a'+i/10))+string(rune('0'+i%10)), 1))
+	}
+	m := structured(t, s.graphRead(ctx, graphInput{IDs: ids, SkipRelations: true}))
+	if queries.Load() != 2 {
+		t.Fatal("expected two batches of <=20", queries.Load())
+	}
+	if m["complete"] != false || !strings.Contains(mustJSON(m["incomplete_reasons"]), "unavailable_ids") {
+		t.Fatal("unavailable should make it incomplete", m["incomplete_reasons"])
+	}
+	m = structured(t, s.graphRead(ctx, graphInput{IDs: []string{gWork}, Depth: 3, MaxEntities: 2}))
+	if m["complete"] != false || !strings.Contains(mustJSON(m["incomplete_reasons"]), "max_entities_reached") {
+		t.Fatal("entity cap not reported", m["incomplete_reasons"])
+	}
+}
+
+func TestGraphToolValidation(t *testing.T) {
+	s := New(testConfig("http://127.0.0.1:1"), nil)
+	ctx := principalContext(Principal{PAT: "mfp_x", Grant: Grant{UserID: "u", Scopes: []string{"mcp.read"}}})
+	cs := connect(t, s, ctx)
+	r, e := cs.CallTool(ctx, &mcp.CallToolParams{Name: "catalog_graph_read", Arguments: map[string]any{"ids": []string{"x"}, "depth": 9}})
+	if e != nil || r.IsError {
+		t.Fatal(e)
+	}
+	if m := structured(t, r); m["error"] != "invalid_tool_arguments" || len(m["details"].([]any)) != 2 {
+		t.Fatal(m)
+	}
+}
+
+func TestContractModes(t *testing.T) {
+	doc := map[string]any{
+		"info": map[string]any{"title": "c"},
+		"paths": map[string]any{
+			"/catalog/commits": map[string]any{"post": map[string]any{"summary": strings.Repeat("long ", 100), "requestBody": map[string]any{"content": map[string]any{"application/json": map[string]any{"schema": map[string]any{"$ref": "#/components/schemas/CatalogCommit"}}}}, "responses": map[string]any{"200": map[string]any{"content": map[string]any{"application/json": map[string]any{"schema": map[string]any{"$ref": "#/components/schemas/CommitReceipt"}}}}}}},
+		},
+		"components": map[string]any{"schemas": map[string]any{
+			"CatalogCommit":   map[string]any{"properties": map[string]any{"operations": map[string]any{"items": map[string]any{"$ref": "#/components/schemas/CommitOperation"}}}},
+			"CommitOperation": map[string]any{}, "CommitReceipt": map[string]any{}, "Unrelated": map[string]any{"big": strings.Repeat("x", 5000)},
+		}},
+	}
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, doc) }))
+	defer up.Close()
+	s := New(testConfig(up.URL), nil)
+	ctx := principalContext(Principal{PAT: "mfp_x", Grant: Grant{UserID: "u", Scopes: []string{"mcp.read"}}})
+	m := structured(t, s.contract(ctx, nil))
+	ops := m["operations"].([]any)
+	op := ops[0].(map[string]any)
+	if m["mode"] != "summary" || op["request"] != "CatalogCommit" || op["response"] != "CommitReceipt" || len([]rune(op["summary"].(string))) > 161 || strings.Contains(mustJSON(m), strings.Repeat("x", 100)) {
+		t.Fatal("bad summary", m)
+	}
+	m = structured(t, s.contract(ctx, json.RawMessage(`{"path":"/api/catalog/commits","method":"POST"}`)))
+	sc := m["schemas"].(map[string]any)
+	if sc["CommitOperation"] == nil || sc["CommitReceipt"] == nil || sc["Unrelated"] != nil {
+		t.Fatal("operation schemas closure", sc)
+	}
+	if m = structured(t, s.contract(ctx, json.RawMessage(`{"mode":"full"}`))); m["catalog"] == nil {
+		t.Fatal("full mode")
+	}
+	if m = structured(t, s.contract(ctx, json.RawMessage(`{"path":"/api/nope"}`))); m["status"] != float64(404) {
+		t.Fatal("missing op", m)
+	}
+}
+
+func TestCommitDiff(t *testing.T) {
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/catalog/entities/"+gRelease {
+			writeJSON(w, 200, map[string]any{"id": gRelease, "kind": "release", "title": "rye", "version": 4, "attributes": map[string]any{"catalog_number": "TECI-1", "a/b": 1}})
+			return
+		}
+		writeJSON(w, 404, map[string]any{"error": "not_found"})
+	}))
+	defer up.Close()
+	s := New(testConfig(up.URL), nil)
+	ctx := principalContext(Principal{PAT: "mfp_x", Grant: Grant{UserID: "u", Scopes: []string{"catalog.entity.edit"}}})
+	commit := roundTrip(map[string]any{"id": "c", "edit_note": "n", "sources": []any{map[string]any{}}, "operations": []any{
+		map[string]any{"target": "entity", "action": "create", "ref": "x", "document": map[string]any{"kind": "track", "title": "day by day", "position": 1}},
+		map[string]any{"target": "entity", "action": "update", "id": gRelease, "base_version": 3, "patch": []any{
+			map[string]any{"path": "/attributes/catalog_number", "value": "TECI-2"},
+			map[string]any{"path": "/title", "value": "rye"},
+			map[string]any{"path": "/attributes/a~1b", "remove": true},
+			map[string]any{"path": "/attributes/new", "value": 1},
+		}},
+		map[string]any{"target": "entity", "action": "update", "id": gMedium, "base_version": 1, "patch": []any{map[string]any{"path": "/title", "value": "x"}}},
+	}})
+	m := structured(t, s.commitDiff(ctx, commit))
+	ops := m["operations"].([]any)
+	upd := ops[1].(map[string]any)
+	ch := upd["changes"].([]any)
+	c0, c1, c2, c3 := ch[0].(map[string]any), ch[1].(map[string]any), ch[2].(map[string]any), ch[3].(map[string]any)
+	if upd["stale_base"] != true || upd["current_version"] != float64(4) || c0["old"] != "TECI-1" || c0["new"] != "TECI-2" || c1["no_op"] != true || c2["op"] != "remove" || c2["old"] != float64(1) || c3["old_absent"] != true {
+		t.Fatal("diff wrong", mustJSON(upd))
+	}
+	if ops[0].(map[string]any)["title"] != "day by day" || ops[2].(map[string]any)["read_error"] != "not_found" || m["updates_without_current_snapshot"] != float64(1) {
+		t.Fatal("create/unreadable", mustJSON(m))
+	}
+}
