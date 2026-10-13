@@ -38,13 +38,13 @@ func catalogDefs() map[string]any {
 		// {"$ref":"name"} refers to an operation ref created earlier in the same commit.
 		"LocalRef": obj(map[string]any{"$ref": map[string]any{"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"}}, "$ref"),
 		"IDOrRef":  map[string]any{"anyOf": []any{str(), ref("LocalRef")}, "description": "Entity/relation UUID, or {\"$ref\":\"name\"} of an earlier operation in this commit"},
-		// Commit-level evidence pool. "key" is reserved for the upcoming
-		// per-operation source_refs; the backend does not accept it yet.
+		// Commit-level evidence pool. "key" names a source so operations can
+		// cite it through source_refs (MetaFusion backend source_refs contract).
 		"SourceInput": obj(map[string]any{
 			"kind":     map[string]any{"type": "string", "enum": []string{"url", "publication"}},
 			"citation": map[string]any{"type": "string", "minLength": 1},
 			"url":      str(),
-			"key":      map[string]any{"type": "string", "description": "Reserved for per-operation source_refs (not yet accepted upstream)"},
+			"key":      map[string]any{"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$", "description": "Commit-local name, unique within the commit; operations cite it in source_refs"},
 		}, "kind", "citation"),
 		"Source":      obj(map[string]any{"kind": map[string]any{"type": "string", "enum": []string{"url", "publication", "self"}}, "citation": str(), "url": str()}),
 		"TimeSpan":    obj(map[string]any{"begin": str(), "end": str()}),
@@ -69,8 +69,9 @@ func catalogDefs() map[string]any {
 				map[string]any{"required": []string{"remove"}, "properties": map[string]any{"remove": map[string]any{"const": true}}, "not": map[string]any{"required": []string{"value"}}},
 			},
 		},
-		// Reserved: [{source: key, pointers: [json-pointer]}]. Shape-checked only.
-		"SourceRefs": arr(obj(map[string]any{"source": map[string]any{"type": "string", "minLength": 1}, "pointers": arr(map[string]any{"type": "string", "pattern": "^(/.*)?$"})}, "source"), "description", "Reserved for upcoming per-operation evidence mapping; semantics not implemented and not yet accepted upstream"),
+		// [{source: key, pointers: [json-pointer]}]: only the cited sources are
+		// written to this operation's revision, with their field pointers.
+		"SourceRefs": arr(obj(map[string]any{"source": map[string]any{"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$", "description": "key of a commit source"}, "pointers": arr(map[string]any{"type": "string", "pattern": "^/"}, "description", "JSON Pointer field paths this source supports (e.g. /attributes/catalog_number); omit for the whole operation")}, "source"), "minItems", 1, "description", "Evidence for this operation. Omitting it inherits the whole source pool and returns a source_refs_missing warning (an error once the server enables strict mode)"),
 		"CommitOperation": map[string]any{"oneOf": []any{
 			obj(map[string]any{"target": map[string]any{"const": "entity"}, "action": map[string]any{"const": "create"}, "ref": ref("RefName"), "document": ref("Entity"), "reviewed_candidate_ids": arr(str(), "maxItems", 1000), "source_refs": ref("SourceRefs")}, "target", "action", "ref", "document", "reviewed_candidate_ids"),
 			obj(map[string]any{"target": map[string]any{"const": "relation"}, "action": map[string]any{"const": "create"}, "ref": ref("RefName"), "document": ref("Relation"), "reviewed_candidate_ids": arr(str(), "maxItems", 1000), "source_refs": ref("SourceRefs")}, "target", "action", "ref", "document"),

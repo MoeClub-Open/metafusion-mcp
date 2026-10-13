@@ -54,6 +54,11 @@ func (s *Server) commitDiff(ctx context.Context, body any) *mcp.CallToolResult {
 	stale, unread := 0, 0
 	for i, op := range ops {
 		item := map[string]any{"index": i, "target": op["target"], "action": op["action"]}
+		if refs, ok := op["source_refs"]; ok {
+			item["source_refs"] = refs
+		} else {
+			item["source_refs_missing"] = true
+		}
 		switch op["action"] {
 		case "create":
 			doc, _ := op["document"].(map[string]any)

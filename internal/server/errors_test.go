@@ -209,3 +209,24 @@ func TestShortcutToolValidationBeforeUpstream(t *testing.T) {
 		t.Fatal("prepare validation", m)
 	}
 }
+
+func TestSourceRefsSchemaShape(t *testing.T) {
+	schema := commitPrepareSchema()
+	c := validCommit()
+	if is := validateSchema(schema, roundTrip(c)); len(is) != 0 {
+		t.Fatal(is)
+	}
+	ops := c["operations"].([]any)
+	ops[0].(map[string]any)["source_refs"] = []any{}
+	ops[2].(map[string]any)["source_refs"] = []any{map[string]any{"source": "label", "pointers": []any{"title"}}}
+	c["sources"].([]any)[0].(map[string]any)["key"] = "1bad"
+	got := map[string]bool{}
+	for _, i := range validateSchema(schema, roundTrip(c)) {
+		got[i.Path] = true
+	}
+	for _, want := range []string{"/operations/0/source_refs", "/operations/2/source_refs/0/pointers/0", "/sources/0/key"} {
+		if !got[want] {
+			t.Error("missing", want, got)
+		}
+	}
+}
