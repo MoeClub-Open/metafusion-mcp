@@ -58,6 +58,7 @@ func (s *Server) addTools() {
 	s.addCloudTools()
 	s.addGraphTool()
 	s.addQualityTool()
+	s.addIdentityTool()
 	object := map[string]any{"type": "object", "additionalProperties": true}
 	apiSchema := map[string]any{"type": "object", "required": []string{"method", "path"}, "additionalProperties": false, "properties": map[string]any{
 		"method": map[string]any{"type": "string", "enum": []string{"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "get", "head", "post", "put", "patch", "delete"}}, "path": map[string]any{"type": "string", "pattern": "^/api/", "description": "Same-instance /api/... path. No host, query, fragment or internal endpoint."}, "query": object, "body": map[string]any{}, "headers": map[string]any{"type": "object", "additionalProperties": map[string]string{"type": "string"}}, "body_base64": map[string]string{"type": "string"}, "content_type": map[string]string{"type": "string"}, "multipart": map[string]any{"type": "array", "items": map[string]any{"type": "object", "required": []string{"name"}, "properties": map[string]any{"name": map[string]string{"type": "string"}, "filename": map[string]string{"type": "string"}, "text": map[string]string{"type": "string"}, "base64": map[string]string{"type": "string"}, "content_type": map[string]string{"type": "string"}}}}}}
@@ -150,7 +151,7 @@ func readOperation(method, p string) bool {
 	if method == "GET" || method == "HEAD" {
 		return true
 	}
-	return method == "POST" && slices.Contains([]string{"/api/catalog/relationships/query", "/api/catalog/entities/candidates", "/api/catalog/entities/identity", "/api/catalog/expressions/details", "/api/catalog/checkout", "/api/catalog/commits/preview", "/api/catalog/quality/batch"}, p)
+	return method == "POST" && slices.Contains([]string{"/api/catalog/relationships/query", "/api/catalog/entities/candidates", "/api/catalog/entities/candidates/batch", "/api/catalog/entities/identity", "/api/catalog/expressions/details", "/api/catalog/checkout", "/api/catalog/commits/preview", "/api/catalog/quality/batch"}, p)
 }
 func queryValues(in map[string]any) (url.Values, error) {
 	q := url.Values{}

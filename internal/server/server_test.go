@@ -215,7 +215,7 @@ func TestMCPToolsThroughOfficialClient(t *testing.T) {
 	}
 	defer cs.Close()
 	list, e := cs.ListTools(context.Background(), nil)
-	if e != nil || len(list.Tools) != 15 {
+	if e != nil || len(list.Tools) != 16 {
 		t.Fatalf("tool discovery: %v %v", list, e)
 	}
 	r, e := cs.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "metafusion://workflow"})
