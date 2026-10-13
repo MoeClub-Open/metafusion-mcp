@@ -54,7 +54,7 @@ type User struct {
 	Banned      bool     `json:"banned"`
 }
 
-var supportedScopes = []string{"mcp.read", "catalog.entity.edit", "catalog.relation.edit", "catalog.import.submit", "community.post.create", "community.post.moderate", "community.topic.pin", "community.report.review", "storage.asset.upload", "storage.asset.moderate", "auth.audit.read"}
+var supportedScopes = []string{"mcp.read", "catalog.entity.edit", "catalog.relation.edit", "community.post.create", "community.post.moderate", "community.topic.pin", "community.report.review", "storage.asset.upload", "storage.asset.moderate", "auth.audit.read"}
 
 var defaultScopes = []string{"mcp.read", "catalog.entity.edit"}
 
@@ -98,7 +98,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PATCH /mcp/manage/api/grants/{id}", s.updateGrant)
 	transport := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return s.MCP }, &mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true})
 	protected := auth.RequireBearerToken(s.verify, &auth.RequireBearerTokenOptions{ResourceMetadataURL: s.Config.PublicURL + "/.well-known/oauth-protected-resource/mcp"})(transport)
-	mux.Handle("/mcp", protected)
+	mux.Handle("/mcp", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && !hasBearer(r) && acceptsHTML(r) {
+			s.page(w, r)
+			return
+		}
+		protected.ServeHTTP(w, r)
+	}))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -309,6 +315,9 @@ func (s *Server) grants(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 503, "store_unavailable")
 		return
 	}
+	for i := range g {
+		g[i].Scopes = filterSupportedScopes(g[i].Scopes)
+	}
 	writeJSON(w, 200, map[string]any{"items": g})
 }
 func (s *Server) mintPAT(ctx context.Context, cookie, name string, scopes []string, days int) (string, string, error) {
@@ -436,5 +445,25 @@ func (s *Server) updateGrant(w http.ResponseWriter, r *http.Request) {
 	}
 	cleanup := s.deletePAT(r.Context(), cookie, g.PATID)
 	writeJSON(w, 200, map[string]any{"updated": true, "upstream_token_revoked": cleanup})
+}
+func filterSupportedScopes(scopes []string) []string {
+	out := make([]string, 0, len(scopes))
+	for _, scope := range scopes {
+		if slices.Contains(supportedScopes, scope) && !slices.Contains(out, scope) {
+			out = append(out, scope)
+		}
+	}
+	return out
+}
+func hasBearer(r *http.Request) bool {
+	fields := strings.Fields(r.Header.Get("Authorization"))
+	return len(fields) == 2 && strings.EqualFold(fields[0], "Bearer")
+}
+func acceptsHTML(r *http.Request) bool {
+	if r.Header.Get("Sec-Fetch-Mode") == "navigate" {
+		return true
+	}
+	accept := r.Header.Get("Accept")
+	return strings.Contains(accept, "text/html")
 }
 func mustJSON(v any) string { b, _ := json.Marshal(v); return string(b) }

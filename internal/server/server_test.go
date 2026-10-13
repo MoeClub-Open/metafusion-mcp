@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -34,6 +35,7 @@ func TestRequestedBusinessScopes(t *testing.T) {
 		{"omitted scopes offer minimal consent", "", []string{"mcp.read", "catalog.entity.edit"}, false},
 		{"wildcard cannot be delegated", "mcp.read *", nil, true},
 		{"management cannot be delegated", "mcp.read catalog.definitions.manage", nil, true},
+		{"import submit is dropped silently", "openid mcp.read catalog.import.submit", []string{"mcp.read"}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := requestedBusinessScopes(tc.raw)
@@ -231,5 +233,34 @@ func TestRedirectAndPKCEValidation(t *testing.T) {
 		if !validRedirect(r) {
 			t.Errorf("safe redirect rejected %s", r)
 		}
+	}
+}
+
+func TestMCPLandingPage(t *testing.T) {
+	s := New(testConfig("https://site.test"), &Store{})
+	h := s.Handler()
+	req := httptest.NewRequest("GET", "https://site.test/mcp", nil)
+	req.Header.Set("Accept", "text/html")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "MCP") || !strings.Contains(w.Header().Get("Content-Type"), "text/html") {
+		t.Fatalf("landing status=%d type=%q body=%q", w.Code, w.Header().Get("Content-Type"), w.Body.String())
+	}
+	api := httptest.NewRequest("GET", "https://site.test/mcp", nil)
+	api.Header.Set("Accept", "application/json")
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, api)
+	if w.Code != 401 || !strings.Contains(w.Body.String(), "no bearer token") {
+		t.Fatalf("api without bearer status=%d body=%q", w.Code, w.Body.String())
+	}
+}
+func TestFilterSupportedScopesDropsImport(t *testing.T) {
+	got := filterSupportedScopes([]string{"mcp.read", "catalog.import.submit", "catalog.entity.edit", "catalog.import.submit"})
+	want := []string{"mcp.read", "catalog.entity.edit"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v want %v", got, want)
+	}
+	if slices.Contains(supportedScopes, "catalog.import.submit") {
+		t.Fatal("catalog.import.submit must not remain in supportedScopes")
 	}
 }
