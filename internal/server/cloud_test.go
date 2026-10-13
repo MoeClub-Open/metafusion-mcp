@@ -149,7 +149,7 @@ func TestCloudCommitDraftOwnershipAndImmutablePush(t *testing.T) {
 		t.Fatal(e)
 	}
 	defer cs.Close()
-	draft, e := cs.CallTool(ctx, &mcp.CallToolParams{Name: "metafusion_commit_prepare", Arguments: map[string]any{"definitions_etag": "etag", "edit_note": "evidence checked by Agent", "sources": []map[string]string{{"kind": "url", "url": "https://example.com"}}, "operations": []map[string]any{{"target": "entity", "action": "patch", "id": "entity", "base_version": 2, "patch": []map[string]string{{"path": "/title", "value": "edited"}}}}}})
+	draft, e := cs.CallTool(ctx, &mcp.CallToolParams{Name: "metafusion_commit_prepare", Arguments: map[string]any{"definitions_etag": "etag", "edit_note": "evidence checked by Agent", "sources": []map[string]string{{"kind": "url", "url": "https://example.com", "citation": "Example"}}, "operations": []map[string]any{{"target": "entity", "action": "update", "id": "11111111-2222-4333-8444-555555555555", "base_version": 2, "patch": []map[string]string{{"path": "/title", "value": "edited"}}}}}})
 	if e != nil || draft.IsError {
 		t.Fatal("cloud prepare failed", e, draft)
 	}

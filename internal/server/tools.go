@@ -42,7 +42,9 @@ func result(v any, bad bool) *mcp.CallToolResult {
 	b, _ := json.Marshal(v)
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: string(b)}}, StructuredContent: v, IsError: bad}
 }
-func toolError(code string) *mcp.CallToolResult { return result(map[string]any{"error": code}, true) }
+func toolError(code string) *mcp.CallToolResult {
+	return result(map[string]any{"ok": false, "error": code}, true)
+}
 func currentPrincipal(ctx context.Context) (Principal, bool) {
 	ti := auth.TokenInfoFromContext(ctx)
 	if ti == nil {
@@ -69,20 +71,34 @@ func (s *Server) addTools() {
 	shortcuts := []struct {
 		Name, Method, Path, Description string
 		Read                            bool
+		Body                            map[string]any
 	}{
-		{"metafusion_search", "GET", "/api/catalog/entities", "Search/list catalog entities using the current API query parameters and pagination. Search uses the instance's OpenSearch.", true},
-		{"metafusion_relationships", "POST", "/api/catalog/relationships/query", "Query the complete structured entity relationship API; pass the exact live request schema in body.", true},
-		{"metafusion_candidates", "POST", "/api/catalog/entities/candidates", "Review identity candidates before creating entities; never create duplicates blindly.", true},
-		{"metafusion_checkout", "POST", "/api/catalog/checkout", "Read versioned snapshots and definitions_etag for a local commit workspace.", true},
-		{"metafusion_commit_preview", "POST", "/api/catalog/commits/preview", "Validate and preview an immutable catalog commit without applying it.", true},
-		{"metafusion_commit_push", "POST", "/api/catalog/commits", "Atomically push the sealed commit. Same ID and identical payload support receipt recovery. 409 is a true conflict; 503 transaction_busy/applied:false permits explicit same-ID retry.", false},
+		{"metafusion_search", "GET", "/api/catalog/entities", "Search/list catalog entities using the current API query parameters and pagination. Search uses the instance's OpenSearch.", true, nil},
+		{"metafusion_relationships", "POST", "/api/catalog/relationships/query", "Query direct structural, semantic and attribute-reference neighbors of 1-20 entity UUIDs. body follows RelationshipQueryRequest; results are paginated per subject, so follow has_more/offset before concluding a relation is absent.", true, relationshipQuerySchema()},
+		{"metafusion_candidates", "POST", "/api/catalog/entities/candidates", "Review identity candidates before creating entities; never create duplicates blindly. body follows IdentityCandidateQuery: kind plus at least one of titles, external_ids or attributes.", true, candidateQuerySchema()},
+		{"metafusion_checkout", "POST", "/api/catalog/checkout", "Read versioned snapshots and definitions_etag for a local commit workspace.", true, nil},
+		{"metafusion_commit_preview", "POST", "/api/catalog/commits/preview", "Validate and preview an immutable catalog commit without applying it.", true, nil},
+		{"metafusion_commit_push", "POST", "/api/catalog/commits", "Atomically push the sealed commit. Same ID and identical payload support receipt recovery. 409 is a true conflict; 503 transaction_busy/applied:false permits explicit same-ID retry.", false, nil},
 	}
 	for _, item := range shortcuts {
 		item := item
-		s.MCP.AddTool(&mcp.Tool{Name: item.Name, Description: item.Description, InputSchema: map[string]any{"type": "object", "properties": map[string]any{"query": object, "body": map[string]any{}}}, Annotations: &mcp.ToolAnnotations{ReadOnlyHint: item.Read}}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		var schema map[string]any
+		if item.Body != nil {
+			schema = withDefs(shortcutSchema(item.Body))
+		}
+		input := any(map[string]any{"type": "object", "properties": map[string]any{"query": object, "body": map[string]any{}}})
+		if schema != nil {
+			input = schema
+		}
+		s.MCP.AddTool(&mcp.Tool{Name: item.Name, Description: item.Description, InputSchema: input, Annotations: &mcp.ToolAnnotations{ReadOnlyHint: item.Read}}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			if schema != nil {
+				if _, bad := validateArgs(schema, req.Params.Arguments); bad != nil {
+					return bad, nil
+				}
+			}
 			var args APIInput
 			if json.Unmarshal(req.Params.Arguments, &args) != nil {
-				return toolError("invalid_arguments"), nil
+				return expectedError(400, "invalid_tool_arguments", "arguments must be a JSON object with query/body", nil, nil), nil
 			}
 			args.Method = item.Method
 			args.Path = item.Path
@@ -228,11 +244,11 @@ func (s *Server) callAPI(ctx context.Context, in APIInput) *mcp.CallToolResult {
 	}
 	method := strings.ToUpper(in.Method)
 	if !slices.Contains([]string{"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"}, method) {
-		return toolError("invalid_method")
+		return expectedError(400, "invalid_method", "unsupported HTTP method", nil, nil)
 	}
 	safe, e := safeAPIPath(in.Path)
 	if e != nil {
-		return toolError(e.Error())
+		return expectedError(400, e.Error(), "path is not an allowed same-instance /api/ path", nil, nil)
 	}
 	read := readOperation(method, in.Path)
 	writeAllowed := false
@@ -242,21 +258,21 @@ func (s *Server) callAPI(ctx context.Context, in APIInput) *mcp.CallToolResult {
 		}
 	}
 	if !writeAllowed && !read {
-		return toolError("insufficient_scope")
+		return expectedError(403, "insufficient_scope", "the MCP grant does not allow this write", nil, nil)
 	}
 	if !s.limiter.AllowAPI(p, in.Method, in.Path) {
-		return result(map[string]any{"status": 429, "error": "rate_limited", "retry_after": 60}, true)
+		return expectedError(429, "rate_limited", "MCP rate limit exhausted", nil, 60)
 	}
 	q, e := queryValues(in.Query)
 	if e != nil {
-		return toolError("invalid_query")
+		return expectedError(400, "invalid_query", "query values must be scalars or arrays of scalars", nil, nil)
 	}
 	b, ct, e := requestBody(in)
 	if e != nil {
-		return toolError("invalid_body")
+		return expectedError(400, "invalid_body", e.Error(), nil, nil)
 	}
 	if len(b) > 8<<20 {
-		return toolError("request_too_large")
+		return expectedError(413, "request_too_large", "request body exceeds 8 MiB", nil, nil)
 	}
 	target := s.Config.APIURL + safe
 	if len(q) > 0 {
@@ -272,7 +288,7 @@ func (s *Server) callAPI(ctx context.Context, in APIInput) *mcp.CallToolResult {
 	}
 	for name, value := range in.Headers {
 		if !slices.Contains([]string{"if-match", "if-none-match", "accept", "accept-language", "idempotency-key"}, strings.ToLower(name)) || strings.ContainsAny(value, "\r\n") {
-			return toolError("header_not_allowed")
+			return expectedError(400, "header_not_allowed", "only If-Match, If-None-Match, Accept, Accept-Language and Idempotency-Key may be set", nil, nil)
 		}
 		req.Header.Set(name, value)
 	}
@@ -285,12 +301,12 @@ func (s *Server) callAPI(ctx context.Context, in APIInput) *mcp.CallToolResult {
 		if read {
 			state = "read_failed"
 		}
-		return result(map[string]any{"error": "upstream_unavailable", "outcome": state, "retry_automatically": false}, true)
+		return result(map[string]any{"ok": false, "error": "upstream_unavailable", "outcome": state, "retry_automatically": false}, true)
 	}
 	defer res.Body.Close()
 	raw, e := io.ReadAll(io.LimitReader(res.Body, 8<<20+1))
 	if e != nil || len(raw) > 8<<20 {
-		return result(map[string]any{"error": "upstream_response_unavailable", "status": res.StatusCode, "outcome": "unknown", "retry_automatically": false}, true)
+		return result(map[string]any{"ok": false, "error": "upstream_response_unavailable", "status": res.StatusCode, "outcome": "unknown", "retry_automatically": false}, true)
 	}
 	var data any
 	if len(raw) > 0 {
@@ -304,7 +320,7 @@ func (s *Server) callAPI(ctx context.Context, in APIInput) *mcp.CallToolResult {
 			headers[k] = v
 		}
 	}
-	return result(map[string]any{"status": res.StatusCode, "headers": headers, "data": data}, res.StatusCode >= 400)
+	return upstreamResult(res.StatusCode, res.Header, headers, data)
 }
 func (s *Server) contract(ctx context.Context, args json.RawMessage) *mcp.CallToolResult {
 	var in struct {
