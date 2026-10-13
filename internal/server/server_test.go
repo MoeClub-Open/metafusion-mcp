@@ -254,6 +254,44 @@ func TestMCPLandingPage(t *testing.T) {
 		t.Fatalf("api without bearer status=%d body=%q", w.Code, w.Body.String())
 	}
 }
+
+func TestProxyPublicOriginAssets(t *testing.T) {
+	// PublicURL is the internal gateway; browser hits a public hostname through the proxy.
+	s := New(testConfig("http://127.0.0.1:10100"), &Store{})
+	h := s.Handler()
+	req := httptest.NewRequest("GET", "http://mf-test.example/mcp/assets/app.js", nil)
+	req.Host = "mf-test.example"
+	req.Header.Set("X-Forwarded-Proto", "https")
+	req.Header.Set("Origin", "https://mf-test.example")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != 200 || !strings.Contains(w.Header().Get("Content-Type"), "javascript") {
+		t.Fatalf("asset with proxy Origin status=%d type=%q body=%q", w.Code, w.Header().Get("Content-Type"), w.Body.String())
+	}
+	evil := httptest.NewRequest("GET", "http://mf-test.example/mcp/assets/app.js", nil)
+	evil.Host = "mf-test.example"
+	evil.Header.Set("X-Forwarded-Proto", "https")
+	evil.Header.Set("Origin", "https://evil.example")
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, evil)
+	if w.Code != 403 || !strings.Contains(w.Body.String(), "origin_not_allowed") {
+		t.Fatalf("evil Origin status=%d body=%q", w.Code, w.Body.String())
+	}
+	// Manage mutating API must accept the proxy public Origin, not only MCP_PUBLIC_URL.
+	post := httptest.NewRequest("POST", "http://mf-test.example/mcp/manage/api/approve", strings.NewReader("{}"))
+	post.Host = "mf-test.example"
+	post.Header.Set("X-Forwarded-Proto", "https")
+	post.Header.Set("Origin", "https://mf-test.example")
+	post.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, post)
+	if w.Code == 403 && strings.Contains(w.Body.String(), "same_origin_required") {
+		t.Fatalf("proxy Origin rejected as same_origin_required: %q", w.Body.String())
+	}
+	if w.Code == 403 && strings.Contains(w.Body.String(), "origin_not_allowed") {
+		t.Fatalf("proxy Origin rejected as origin_not_allowed: %q", w.Body.String())
+	}
+}
 func TestFilterSupportedScopesDropsImport(t *testing.T) {
 	got := filterSupportedScopes([]string{"mcp.read", "catalog.import.submit", "catalog.entity.edit", "catalog.import.submit"})
 	want := []string{"mcp.read", "catalog.entity.edit"}

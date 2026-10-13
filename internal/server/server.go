@@ -110,7 +110,7 @@ func (s *Server) Handler() http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		origin := r.Header.Get("Origin")
-		if origin != "" && !slices.Contains(s.Config.AllowedOrigins, origin) {
+		if origin != "" && !s.originAllowed(r, origin) {
 			writeError(w, 403, "origin_not_allowed")
 			return
 		}
@@ -125,7 +125,7 @@ func (s *Server) Handler() http.Handler {
 			w.WriteHeader(204)
 			return
 		}
-		if strings.HasPrefix(r.URL.Path, "/mcp/manage/api/") && r.Method != "GET" && origin != s.Config.PublicURL {
+		if strings.HasPrefix(r.URL.Path, "/mcp/manage/api/") && r.Method != "GET" && !s.originAllowed(r, origin) {
 			writeError(w, 403, "same_origin_required")
 			return
 		}
@@ -455,6 +455,37 @@ func filterSupportedScopes(scopes []string) []string {
 	}
 	return out
 }
+// requestPublicOrigin is the browser-facing origin derived from Host + X-Forwarded-Proto.
+// MCP_PUBLIC_URL can be an internal gateway URL (e.g. http://127.0.0.1:10100) while users
+// load the manage SPA via a public hostname; module scripts and fetch send that public Origin.
+func requestPublicOrigin(r *http.Request) string {
+	host := strings.TrimSpace(strings.Split(r.Host, ",")[0])
+	if host == "" {
+		return ""
+	}
+	proto := strings.TrimSpace(strings.Split(r.Header.Get("X-Forwarded-Proto"), ",")[0])
+	if proto == "" {
+		if r.TLS != nil {
+			proto = "https"
+		} else {
+			proto = "http"
+		}
+	}
+	return proto + "://" + host
+}
+
+// originAllowed accepts configured AllowedOrigins (including MCP_PUBLIC_URL) or a same-site
+// Origin that matches the request Host the reverse proxy forwarded.
+func (s *Server) originAllowed(r *http.Request, origin string) bool {
+	if origin == "" {
+		return false
+	}
+	if slices.Contains(s.Config.AllowedOrigins, origin) {
+		return true
+	}
+	return origin == requestPublicOrigin(r)
+}
+
 func hasBearer(r *http.Request) bool {
 	fields := strings.Fields(r.Header.Get("Authorization"))
 	return len(fields) == 2 && strings.EqualFold(fields[0], "Bearer")
