@@ -18,6 +18,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 )
 
 type APIInput struct {
@@ -57,11 +58,15 @@ func (s *Server) addTools() {
 	s.addCloudTools()
 	object := map[string]any{"type": "object", "additionalProperties": true}
 	apiSchema := map[string]any{"type": "object", "required": []string{"method", "path"}, "additionalProperties": false, "properties": map[string]any{
-		"method": map[string]any{"type": "string", "enum": []string{"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"}}, "path": map[string]any{"type": "string", "description": "Same-instance /api/... path. No host, query, fragment or internal endpoint."}, "query": object, "body": map[string]any{}, "headers": map[string]any{"type": "object", "additionalProperties": map[string]string{"type": "string"}}, "body_base64": map[string]string{"type": "string"}, "content_type": map[string]string{"type": "string"}, "multipart": map[string]any{"type": "array", "items": map[string]any{"type": "object", "required": []string{"name"}, "properties": map[string]any{"name": map[string]string{"type": "string"}, "filename": map[string]string{"type": "string"}, "text": map[string]string{"type": "string"}, "base64": map[string]string{"type": "string"}, "content_type": map[string]string{"type": "string"}}}}}}
+		"method": map[string]any{"type": "string", "enum": []string{"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "get", "head", "post", "put", "patch", "delete"}}, "path": map[string]any{"type": "string", "pattern": "^/api/", "description": "Same-instance /api/... path. No host, query, fragment or internal endpoint."}, "query": object, "body": map[string]any{}, "headers": map[string]any{"type": "object", "additionalProperties": map[string]string{"type": "string"}}, "body_base64": map[string]string{"type": "string"}, "content_type": map[string]string{"type": "string"}, "multipart": map[string]any{"type": "array", "items": map[string]any{"type": "object", "required": []string{"name"}, "properties": map[string]any{"name": map[string]string{"type": "string"}, "filename": map[string]string{"type": "string"}, "text": map[string]string{"type": "string"}, "base64": map[string]string{"type": "string"}, "content_type": map[string]string{"type": "string"}}}}}}
+	apiCallSchema := normalizeSchema(apiSchema)
 	s.MCP.AddTool(&mcp.Tool{Name: "metafusion_api_call", Description: "Call any public MetaFusion API: catalog, relationships, commits, definitions, importer, notifications, community and storage, including authorized administration. Native upstream permission checks remain authoritative. Pass sources and versions unchanged. Never automatically replay writes. Session/password/token-management endpoints stay in the browser.", InputSchema: apiSchema, Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false}}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		if _, bad := validateArgs(apiCallSchema, req.Params.Arguments); bad != nil {
+			return bad, nil
+		}
 		var in APIInput
 		if json.Unmarshal(req.Params.Arguments, &in) != nil {
-			return toolError("invalid_arguments"), nil
+			return expectedError(400, "invalid_tool_arguments", "arguments do not match the api_call shape", nil, nil), nil
 		}
 		return s.callAPI(ctx, in), nil
 	})
@@ -295,18 +300,26 @@ func (s *Server) callAPI(ctx context.Context, in APIInput) *mcp.CallToolResult {
 	if p.PAT != "" {
 		req.Header.Set("Authorization", "Bearer "+p.PAT)
 	}
+	rid := newRequestID()
+	req.Header.Set("X-Request-ID", rid)
+	started := time.Now()
 	res, e := s.HTTP.Do(req)
 	if e != nil {
 		state := "unknown"
 		if read {
 			state = "read_failed"
 		}
-		return result(map[string]any{"ok": false, "error": "upstream_unavailable", "outcome": state, "retry_automatically": false}, true)
+		s.logUpstream(ctx, rid, method, in.Path, 0, "upstream_unavailable", started)
+		return result(map[string]any{"ok": false, "error": "upstream_unavailable", "outcome": state, "retry_automatically": false, "request_id": rid}, true)
 	}
 	defer res.Body.Close()
 	raw, e := io.ReadAll(io.LimitReader(res.Body, 8<<20+1))
+	if v := res.Header.Get("X-Request-ID"); v != "" {
+		rid = v
+	}
 	if e != nil || len(raw) > 8<<20 {
-		return result(map[string]any{"ok": false, "error": "upstream_response_unavailable", "status": res.StatusCode, "outcome": "unknown", "retry_automatically": false}, true)
+		s.logUpstream(ctx, rid, method, in.Path, res.StatusCode, "upstream_response_unavailable", started)
+		return result(map[string]any{"ok": false, "error": "upstream_response_unavailable", "status": res.StatusCode, "outcome": "unknown", "retry_automatically": false, "request_id": rid}, true)
 	}
 	var data any
 	if len(raw) > 0 {
@@ -320,7 +333,16 @@ func (s *Server) callAPI(ctx context.Context, in APIInput) *mcp.CallToolResult {
 			headers[k] = v
 		}
 	}
-	return upstreamResult(res.StatusCode, res.Header, headers, data)
+	out := upstreamResult(res.StatusCode, res.Header, headers, data)
+	m := out.StructuredContent.(map[string]any)
+	if id, _ := m["request_id"].(string); id != "" {
+		rid = id
+	} else {
+		m["request_id"] = rid
+	}
+	code, _ := m["error"].(string)
+	s.logUpstream(ctx, rid, method, in.Path, res.StatusCode, code, started)
+	return result(m, out.IsError)
 }
 func (s *Server) contract(ctx context.Context, args json.RawMessage) *mcp.CallToolResult {
 	var in struct {
