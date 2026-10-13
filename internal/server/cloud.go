@@ -87,7 +87,7 @@ func (s *Server) addCloudTools() {
 		case "diff":
 			return s.commitDiff(ctx, body), nil
 		case "preview":
-			return s.callAPI(ctx, APIInput{Method: "POST", Path: "/api/catalog/commits/preview", Body: body}), nil
+			return withQualityWarnings(s.callAPI(ctx, APIInput{Method: "POST", Path: "/api/catalog/commits/preview", Body: body})), nil
 		case "push":
 			return s.callAPI(ctx, APIInput{Method: "POST", Path: "/api/catalog/commits", Body: body}), nil
 		case "recover":
