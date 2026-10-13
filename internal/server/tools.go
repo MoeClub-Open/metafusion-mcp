@@ -152,7 +152,7 @@ func readOperation(method, p string) bool {
 	if method == "GET" || method == "HEAD" {
 		return true
 	}
-	return method == "POST" && slices.Contains([]string{"/api/catalog/relationships/query", "/api/catalog/entities/candidates", "/api/catalog/entities/candidates/batch", "/api/catalog/entities/identity", "/api/catalog/expressions/details", "/api/catalog/checkout", "/api/catalog/commits/preview", "/api/catalog/quality/batch"}, p)
+	return method == "POST" && slices.Contains([]string{"/api/catalog/relationships/query", "/api/catalog/entities/candidates", "/api/catalog/entities/candidates/batch", "/api/catalog/entities/identity", "/api/catalog/expressions/details", "/api/catalog/checkout", "/api/catalog/commits/preview", "/api/catalog/quality/batch", "/api/external-sources/query"}, p)
 }
 func queryValues(in map[string]any) (url.Values, error) {
 	q := url.Values{}
