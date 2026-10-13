@@ -5,3 +5,8 @@
 运行服务只使用自身 mcp schema 的数据库角色。迁移通过 `go run ./cmd/mcp -migrate` 显式执行，HTTP 启动只读检查。真实凭据不进 Git、日志或 MCP 工具结果。
 
 检查：`go test ./...`、`go vet ./...`、`go build ./cmd/mcp`。数据库集成测试通过 `MCP_TEST_DATABASE_URL` 使用专用测试库。提交只暂存本任务明确路径。
+
+## 提交证据（破坏性）
+
+CatalogCommit / `metafusion_commit_prepare`：每条 `sources[]` 必须有唯一 `key`；每个操作必须有非空 `source_refs`。旧格式无兼容——缺省返回结构化 `source_refs_required` / `source_key_required` / `source_unused`（及 MCP 侧 `invalid_source_refs`）。工具描述与 schema 已强制；示例见 metafusion-docs `api-commits` 与 metafusion-skills 模板。
+

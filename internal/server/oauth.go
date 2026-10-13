@@ -145,7 +145,8 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 	s.page(w, r)
 }
 func (s *Server) authorizationInfo(w http.ResponseWriter, r *http.Request) {
-	if _, _, e := s.session(r); e != nil {
+	u, _, e := s.session(r)
+	if e != nil {
 		writeError(w, 401, "session_required")
 		return
 	}
@@ -154,7 +155,16 @@ func (s *Server) authorizationInfo(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, e.Error())
 		return
 	}
-	writeJSON(w, 200, map[string]any{"client": a.Client, "scopes": a.Scopes, "redirect_uri": a.Redirect})
+	existing := []string{}
+	if grants, err := s.Store.Grants(r.Context(), u.ID); err == nil {
+		for _, g := range grants {
+			if g.ClientID == a.Client.ID && g.Revoked == nil && g.Expires.After(time.Now()) {
+				existing = filterSupportedScopes(g.Scopes)
+				break
+			}
+		}
+	}
+	writeJSON(w, 200, map[string]any{"client": a.Client, "scopes": a.Scopes, "redirect_uri": a.Redirect, "existing_scopes": existing})
 }
 func (s *Server) approve(w http.ResponseWriter, r *http.Request) {
 	u, cookie, e := s.session(r)

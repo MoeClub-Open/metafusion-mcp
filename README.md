@@ -10,6 +10,6 @@
 
 显式运行 `mcp -migrate` 建立自有 schema，再启动 `mcp`；HTTP 启动只读检查。默认数据库连接池 32/16，HTTP 上游空闲连接总计 1024、单上游 256。读写各 180 RPM，按已验证用户计数；admin 组不计业务 RPM。当前固定窗口计数为进程内；多实例全局额度需另接共享计数。
 
-工具包含通用 API、契约、技能读取、查询、候选、checkout、云端提交封存/预览/推送/恢复，以及按明确 URL 或 base64 输入处理文件。提交封存 30 天，URL 文件限 1 GiB，base64 受 8 MiB MCP 请求体限制。平台未知写入结果不自动重放。
+工具包含通用 API、契约、技能读取、查询、候选、checkout、云端提交封存/预览/推送/恢复，以及按明确 URL 或 base64 输入处理文件。提交证据：**每条 source 必须有唯一 key，每个操作必须有 source_refs**；旧格式无兼容，缺省返回 `source_refs_required` / `invalid_source_refs`。提交封存 30 天，URL 文件限 1 GiB，base64 受 8 MiB MCP 请求体限制。平台未知写入结果不自动重放。
 
 验证：`go test ./...`、`go vet ./...`；设置专用 `MCP_TEST_DATABASE_URL` 后包含真实 PostgreSQL 单次授权码交换、刷新轮换、撤销和远程 MCP SDK 接入测试。完整接入与操作说明由 [metafusion-docs](https://github.com/MoeclubM/metafusion-docs/blob/main/docs/api-mcp.md) 维护，技能由 [metafusion-skills](https://github.com/MoeclubM/metafusion-skills) 维护。
