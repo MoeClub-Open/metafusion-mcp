@@ -10,9 +10,20 @@ const normalize = (value) => {
   if (base.startsWith('en')) return 'en-US';
   return '';
 };
+// Language priority — do not use browser navigator locales (they overwrote server zh-CN with en-US):
+// 1) explicit ?ui_locales=  2) site NEXT_LOCALE cookie  3) <html lang> from server  4) zh-CN
+const SITE_LOCALE_COOKIE = 'NEXT_LOCALE';
+const readSiteLocale = () => {
+  const m = document.cookie.match(/(?:^|;\s*)NEXT_LOCALE=([^;]+)/);
+  return m ? normalize(decodeURIComponent(m[1])) : '';
+};
+const writeSiteLocale = (value) => {
+  document.cookie = `${SITE_LOCALE_COOKIE}=${encodeURIComponent(value)}; Path=/; Max-Age=${60 * 60 * 24 * 365}; SameSite=Lax`;
+};
 const requestedLanguages = (new URLSearchParams(location.search).get('ui_locales') || '').split(/\s+/).map(normalize).filter(Boolean);
-const browserLanguages = [navigator.language, ...(navigator.languages || [])].map(normalize).filter(Boolean);
-language.value = [...requestedLanguages, ...browserLanguages, 'zh-CN'].find(value => Object.hasOwn(locales, value)) || 'zh-CN';
+const siteLocale = readSiteLocale();
+const htmlLocale = normalize(document.documentElement.lang);
+language.value = [...requestedLanguages, siteLocale, htmlLocale, 'zh-CN'].find(value => value && Object.hasOwn(locales, value)) || 'zh-CN';
 let words = locales[language.value];
 
 const SCOPE_GROUPS = [
@@ -295,6 +306,7 @@ for (const [id, allow] of [['approve', true], ['deny', false]]) {
 }
 
 language.addEventListener('change', () => {
+  writeSiteLocale(language.value);
   translate();
   void refresh().catch(showError);
 });
