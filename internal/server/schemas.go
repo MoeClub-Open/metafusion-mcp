@@ -62,7 +62,7 @@ func catalogDefs() map[string]any {
 			"id": ref("IDOrRef"), "kind": map[string]any{"type": "string", "enum": entityKinds}, "title": str(), "status": str(), "version": map[string]any{"type": "integer"},
 			"original_language": str(), "number": str(), "position": map[string]any{"type": "integer"},
 			"parent_id": ref("IDOrRef"), "work_id": ref("IDOrRef"), "content_unit_id": ref("IDOrRef"), "release_id": ref("IDOrRef"), "medium_id": ref("IDOrRef"), "redirect_id": ref("IDOrRef"),
-			"attributes": freeObject(), "external_ids": stringMap(), "translations": map[string]any{"type": "object", "additionalProperties": ref("Translation")},
+			"attributes": freeObject(), "external_links": arr(obj(map[string]any{"kind": map[string]any{"type": "string", "minLength": 1}, "url": map[string]any{"type": "string", "minLength": 1}, "external_id": map[string]any{"type": "string"}, "role": map[string]any{"type": "string"}, "origin": map[string]any{"type": "string"}}, "kind", "url"), "maxItems", 50), "translations": map[string]any{"type": "object", "additionalProperties": ref("Translation")},
 			"contents": arr(ref("Inclusion")), "pictures": arr(ref("Picture"), "maxItems", 40), "subjects": arr(ref("Subject")),
 			"created_by": str(), "updated_at": str(),
 		}, "kind"),
@@ -107,7 +107,7 @@ func candidateQuerySchema() map[string]any {
 	return obj(map[string]any{
 		"kind":         map[string]any{"type": "string", "enum": entityKinds},
 		"titles":       arr(val, "maxItems", 20),
-		"external_ids": arr(obj(map[string]any{"provider": map[string]any{"type": "string", "minLength": 1}, "value": val}, "provider", "value"), "maxItems", 20),
+		"external_links": arr(obj(map[string]any{"kind": map[string]any{"type": "string", "minLength": 1}, "value": val}, "kind", "value"), "maxItems", 20),
 		"attributes":   arr(obj(map[string]any{"key": map[string]any{"type": "string", "minLength": 1}, "value": val}, "key", "value"), "maxItems", 20),
 		"work_id":      map[string]any{"type": "string", "format": "uuid"},
 		"release_id":   map[string]any{"type": "string", "format": "uuid"},

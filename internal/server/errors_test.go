@@ -112,7 +112,7 @@ func validCommit() map[string]any {
 		"definitions_etag": "etag", "edit_note": "checked",
 		"sources": []any{map[string]any{"kind": "url", "url": "https://example.com/a", "citation": "Label page", "key": "label"}},
 		"operations": []any{
-			map[string]any{"target": "entity", "action": "create", "ref": "rel1", "reviewed_candidate_ids": []any{}, "document": map[string]any{"kind": "release", "title": "rye", "work_id": uuid1, "external_ids": map[string]any{"vgmdb": "1"}, "attributes": map[string]any{"catalog_number": "TECI-1"}}, "source_refs": []any{map[string]any{"source": "label", "pointers": []any{"/attributes/catalog_number"}}}},
+			map[string]any{"target": "entity", "action": "create", "ref": "rel1", "reviewed_candidate_ids": []any{}, "document": map[string]any{"kind": "release", "title": "rye", "work_id": uuid1, "external_links": []any{map[string]any{"kind": "vgmdb", "url": "mf://external/vgmdb/1", "external_id": "1"}}, "attributes": map[string]any{"catalog_number": "TECI-1"}}, "source_refs": []any{map[string]any{"source": "label", "pointers": []any{"/attributes/catalog_number"}}}},
 			map[string]any{"target": "relation", "action": "create", "ref": "r", "document": map[string]any{"type": "edition_of", "source_id": map[string]any{"$ref": "rel1"}, "target_id": uuid1}, "source_refs": []any{map[string]any{"source": "label"}}},
 			map[string]any{"target": "entity", "action": "update", "id": uuid1, "base_version": 3, "patch": []any{map[string]any{"path": "/title", "value": "x"}, map[string]any{"path": "/attributes/old", "remove": true}}, "source_refs": []any{map[string]any{"source": "label", "pointers": []any{"/title"}}}},
 		},
@@ -160,8 +160,8 @@ func TestQuerySchemas(t *testing.T) {
 	if is := validateSchema(cand, roundTrip(map[string]any{"body": map[string]any{"kind": "work", "titles": []any{"day by day"}, "limit": 50}})); len(is) != 0 {
 		t.Fatal(is)
 	}
-	is := validateSchema(cand, roundTrip(map[string]any{"body": map[string]any{"kind": "song", "performed_by": "x", "external_ids": []any{map[string]any{"provider": "x"}}, "limit": 0}}))
-	if len(is) != 4 {
+	is := validateSchema(cand, roundTrip(map[string]any{"body": map[string]any{"kind": "song", "performed_by": "x", "external_links": []any{map[string]any{"kind": "x", "value": "1"}}, "limit": 0}}))
+	if len(is) != 3 {
 		t.Fatal("candidate issues", is)
 	}
 	rel := withDefs(shortcutSchema(relationshipQuerySchema()))
