@@ -5,6 +5,7 @@ go 1.25.0
 require (
 	github.com/lib/pq v1.12.3
 	github.com/modelcontextprotocol/go-sdk v1.8.0
+	golang.org/x/net v0.50.0
 	golang.org/x/sync v0.20.0
 )
 

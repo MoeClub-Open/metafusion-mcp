@@ -60,6 +60,7 @@ func (s *Server) addTools() {
 	s.addQualityTool()
 	s.addExternalSourceTool()
 	s.addIdentityTool()
+	s.addWebTools()
 	object := map[string]any{"type": "object", "additionalProperties": true}
 	apiSchema := map[string]any{"type": "object", "required": []string{"method", "path"}, "additionalProperties": false, "properties": map[string]any{
 		"method": map[string]any{"type": "string", "enum": []string{"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "get", "head", "post", "put", "patch", "delete"}}, "path": map[string]any{"type": "string", "pattern": "^/api/", "description": "Same-instance /api/... path. No host, query, fragment or internal endpoint."}, "query": object, "body": map[string]any{}, "headers": map[string]any{"type": "object", "additionalProperties": map[string]string{"type": "string"}}, "body_base64": map[string]string{"type": "string"}, "content_type": map[string]string{"type": "string"}, "multipart": map[string]any{"type": "array", "items": map[string]any{"type": "object", "required": []string{"name"}, "properties": map[string]any{"name": map[string]string{"type": "string"}, "filename": map[string]string{"type": "string"}, "text": map[string]string{"type": "string"}, "base64": map[string]string{"type": "string"}, "content_type": map[string]string{"type": "string"}}}}}}
@@ -268,7 +269,7 @@ func (s *Server) callAPI(ctx context.Context, in APIInput) *mcp.CallToolResult {
 	read := readOperation(method, in.Path)
 	writeAllowed := false
 	for _, scope := range p.Grant.Scopes {
-		if scope != "mcp.read" {
+		if !localScope(scope) {
 			writeAllowed = true
 		}
 	}

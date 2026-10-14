@@ -22,6 +22,8 @@ import (
 const maxFileBytes int64 = 1 << 30
 const uploadPartSize int64 = 8 << 20
 
+var errPrivateSourceAddress = errors.New("private_source_address")
+
 func decodeArguments(raw json.RawMessage, v any) error { return json.Unmarshal(raw, v) }
 
 func publicIP(ip net.IP) bool {
@@ -33,7 +35,7 @@ func publicIP(ip net.IP) bool {
 		return false
 	}
 	a = a.Unmap()
-	for _, prefix := range []string{"100.64.0.0/10", "192.0.0.0/24", "192.0.2.0/24", "198.18.0.0/15", "198.51.100.0/24", "203.0.113.0/24", "240.0.0.0/4", "2001:db8::/32", "64:ff9b::/96"} {
+	for _, prefix := range []string{"100.64.0.0/10", "192.0.0.0/24", "192.0.2.0/24", "198.18.0.0/15", "198.51.100.0/24", "203.0.113.0/24", "240.0.0.0/4", "2001:db8::/32", "64:ff9b::/96", "64:ff9b:1::/48", "2002::/16", "2001::/32", "::/96"} {
 		if netip.MustParsePrefix(prefix).Contains(a) {
 			return false
 		}
@@ -55,7 +57,7 @@ func publicClient() *http.Client {
 		}
 		for _, ip := range ips {
 			if !publicIP(ip) {
-				return nil, errors.New("private_source_address")
+				return nil, errPrivateSourceAddress
 			}
 		}
 		d := net.Dialer{Timeout: 10 * time.Second}

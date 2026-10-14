@@ -101,6 +101,7 @@ function initTheme() {
 
 const SCOPE_GROUPS = [
   { id: 'catalogRead', scopes: ['mcp.read'] },
+  { id: 'web', scopes: ['mcp.web.write'] },
   { id: 'catalogEdit', scopes: ['catalog.entity.edit', 'catalog.relation.edit'] },
   { id: 'community', scopes: ['community.post.create', 'community.post.moderate', 'community.topic.pin', 'community.report.review'] },
   { id: 'storage', scopes: ['storage.asset.upload', 'storage.asset.moderate'] },
@@ -317,8 +318,8 @@ async function refresh() {
     document.getElementById('client').textContent = `${authorization.client.client_name} (${authorization.client.client_id})`;
     document.getElementById('callback').textContent = `${words.callback}: ${authorization.redirect_uri}`;
     const allowed = authorization.scopes.filter(scope => scopes.includes(scope) || user.permissions.includes('*'));
-    // Default: select every allowed scope in all five groups.
-    scopePicker(document.getElementById('scopes'), allowed, allowed);
+    // Writes, including third-party HTTP writes, require an explicit checkbox selection.
+    scopePicker(document.getElementById('scopes'), allowed, allowed.filter(scope => scope === 'mcp.read'));
     consent.hidden = false;
   } else {
     consent.hidden = true;

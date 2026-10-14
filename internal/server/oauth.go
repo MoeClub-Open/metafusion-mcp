@@ -204,7 +204,7 @@ func (s *Server) approve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, scope := range in.Scopes {
-		if !slices.Contains(a.Scopes, scope) || (scope != "mcp.read" && !slices.Contains(u.Permissions, "*") && !slices.Contains(u.Permissions, scope)) {
+		if !slices.Contains(a.Scopes, scope) || (!localScope(scope) && !slices.Contains(u.Permissions, "*") && !slices.Contains(u.Permissions, scope)) {
 			writeError(w, 403, "scope_not_granted")
 			return
 		}

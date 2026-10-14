@@ -37,8 +37,8 @@
     },
     "groups": {
       "catalogRead": {
-        "title": "目录只读",
-        "description": "查看条目与关系"
+        "title": "平台与网络只读",
+        "description": "读取公开平台数据、全网搜索与公开网页/API"
       },
       "catalogEdit": {
         "title": "目录编辑",
@@ -55,12 +55,16 @@
       "audit": {
         "title": "审计",
         "description": "查看授权与操作日志"
+      },
+      "web": {
+        "title": "外部网络",
+        "description": "向公开网页和 API 发出请求"
       }
     },
     "scopes": {
       "mcp.read": {
-        "name": "公开数据查询",
-        "purpose": "读取目录与关系等公开平台数据"
+        "name": "平台与网络只读",
+        "purpose": "读取公开平台数据、全网搜索与公开网页/API"
       },
       "catalog.entity.edit": {
         "name": "编辑目录实体",
@@ -97,6 +101,10 @@
       "auth.audit.read": {
         "name": "查看审计日志",
         "purpose": "读取授权与操作审计记录"
+      },
+      "mcp.web.write": {
+        "name": "外部网络写入",
+        "purpose": "允许 POST、PUT、PATCH、DELETE 请求；可修改第三方数据，不授予 MetaFusion 编辑权限"
       }
     },
     "errors": {
@@ -176,8 +184,8 @@
     },
     "groups": {
       "catalogRead": {
-        "title": "Catalog read",
-        "description": "View entities and relations"
+        "title": "Platform and web reads",
+        "description": "Read public platform data, search the web and fetch public webpages/APIs"
       },
       "catalogEdit": {
         "title": "Catalog edit",
@@ -194,12 +202,16 @@
       "audit": {
         "title": "Audit",
         "description": "View authorization and action logs"
+      },
+      "web": {
+        "title": "External web",
+        "description": "Request public webpages and APIs"
       }
     },
     "scopes": {
       "mcp.read": {
-        "name": "Public data queries",
-        "purpose": "Read public catalog and relation data"
+        "name": "Platform and web reads",
+        "purpose": "Read public platform data, search the web and fetch public webpages/APIs"
       },
       "catalog.entity.edit": {
         "name": "Edit catalog entities",
@@ -236,6 +248,10 @@
       "auth.audit.read": {
         "name": "Read audit logs",
         "purpose": "Read authorization and action audit records"
+      },
+      "mcp.web.write": {
+        "name": "External web writes",
+        "purpose": "Allow POST, PUT, PATCH and DELETE requests that may change third-party data; grants no MetaFusion editing permissions"
       }
     },
     "errors": {
@@ -315,8 +331,8 @@
     },
     "groups": {
       "catalogRead": {
-        "title": "目錄唯讀",
-        "description": "查看條目與關係"
+        "title": "平台與網路唯讀",
+        "description": "讀取公開平台資料、全網搜尋與公開網頁/API"
       },
       "catalogEdit": {
         "title": "目錄編輯",
@@ -333,12 +349,16 @@
       "audit": {
         "title": "稽核",
         "description": "查看授權與操作紀錄"
+      },
+      "web": {
+        "title": "外部網路",
+        "description": "向公開網頁和 API 發出請求"
       }
     },
     "scopes": {
       "mcp.read": {
-        "name": "公開資料查詢",
-        "purpose": "讀取目錄與關係等公開平台資料"
+        "name": "平台與網路唯讀",
+        "purpose": "讀取公開平台資料、全網搜尋與公開網頁/API"
       },
       "catalog.entity.edit": {
         "name": "編輯目錄實體",
@@ -375,6 +395,10 @@
       "auth.audit.read": {
         "name": "查看稽核紀錄",
         "purpose": "讀取授權與操作稽核紀錄"
+      },
+      "mcp.web.write": {
+        "name": "外部網路寫入",
+        "purpose": "允許 POST、PUT、PATCH、DELETE 請求；可修改第三方資料，不授予 MetaFusion 編輯權限"
       }
     },
     "errors": {
@@ -454,8 +478,8 @@
     },
     "groups": {
       "catalogRead": {
-        "title": "カタログ読み取り",
-        "description": "エントリと関係の閲覧"
+        "title": "プラットフォームとウェブの参照",
+        "description": "公開データの参照、ウェブ検索、公開ページ/API の取得"
       },
       "catalogEdit": {
         "title": "カタログ編集",
@@ -472,12 +496,16 @@
       "audit": {
         "title": "監査",
         "description": "認可と操作ログの閲覧"
+      },
+      "web": {
+        "title": "外部ウェブ",
+        "description": "公開ウェブページと API へのリクエスト"
       }
     },
     "scopes": {
       "mcp.read": {
-        "name": "公開データの検索",
-        "purpose": "公開カタログと関係データを読み取る"
+        "name": "プラットフォームとウェブの参照",
+        "purpose": "公開データの参照、ウェブ検索、公開ページ/API の取得"
       },
       "catalog.entity.edit": {
         "name": "カタログ実体の編集",
@@ -514,6 +542,10 @@
       "auth.audit.read": {
         "name": "監査ログの閲覧",
         "purpose": "認可と操作の監査記録を読む"
+      },
+      "mcp.web.write": {
+        "name": "外部ウェブへの書き込み",
+        "purpose": "POST、PUT、PATCH、DELETE を許可します。第三者のデータを変更できますが、MetaFusion の編集権限は付与しません"
       }
     },
     "errors": {
