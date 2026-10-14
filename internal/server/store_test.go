@@ -270,7 +270,7 @@ func TestPostgresOAuthToRemoteMCP(t *testing.T) {
 	}
 	defer session.Close()
 	listed, e := session.ListTools(ctx, nil)
-	if e != nil || len(listed.Tools) != 17 {
+	if e != nil || len(listed.Tools) != 19 {
 		t.Fatal("remote MCP tool discovery failed", e)
 	}
 	res, e := session.CallTool(ctx, &mcp.CallToolParams{Name: "metafusion_search", Arguments: map[string]any{"query": map[string]string{"q": "sample"}}})
