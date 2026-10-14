@@ -10,7 +10,7 @@ import (
 )
 
 func TestWebSearchProvidersThroughSDK(t *testing.T) {
-	for _, provider := range []string{"duckduckgo", "brave", "searxng"} {
+	for _, provider := range []string{"duckduckgo", "bing", "brave", "searxng"} {
 		t.Run(provider, func(t *testing.T) {
 			c := testConfig("https://platform.example")
 			c.SearchProvider = provider
@@ -24,6 +24,11 @@ func TestWebSearchProvidersThroughSDK(t *testing.T) {
 					t.Fatal(r.URL, r.Header)
 				}
 				switch provider {
+				case "bing":
+					if r.URL.Query().Get("format") != "rss" {
+						t.Fatal(r.URL)
+					}
+					return webResponse(200, `<rss><channel><item><title>Music</title><link>https://music.example/a</link><description>Evidence</description></item></channel></rss>`), nil
 				case "duckduckgo":
 					return webResponse(200, `<div class="result"><a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fmusic.example%2Fa">Music <b>&amp; data</b></a><a class="result__snippet">Original evidence</a></div><div class="result"><a class="result__a" href="http://127.0.0.1">private</a></div>`), nil
 				case "brave":
@@ -64,6 +69,8 @@ func TestSearchChallengeMalformedAndEmptyResults(t *testing.T) {
 	}{
 		{"duckduckgo", `<form>Unfortunately, bots use DuckDuckGo too.</form>`, false},
 		{"duckduckgo", `<div class="no-results">No results found</div>`, true},
+		{"bing", `<html><body>Search challenge</body></html>`, false},
+		{"bing", `<rss><channel/></rss>`, true},
 		{"brave", `{"error":"quota"}`, false},
 		{"brave", `{"web":{"results":[]}}`, true},
 		{"searxng", `{"results":[],"unresponsive_engines":[["bing","timeout"]]}`, false},

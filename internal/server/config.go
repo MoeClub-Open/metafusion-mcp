@@ -28,6 +28,10 @@ func LoadConfig() (Config, error) {
 		c.SearchProvider = "duckduckgo"
 	}
 	switch c.SearchProvider {
+	case "bing":
+		if c.SearchURL == "" {
+			c.SearchURL = "https://www.bing.com/search"
+		}
 	case "duckduckgo":
 		if c.SearchURL == "" {
 			c.SearchURL = "https://html.duckduckgo.com/html/"
@@ -44,7 +48,7 @@ func LoadConfig() (Config, error) {
 			return c, errors.New("MCP_SEARCH_URL is required for SearXNG search")
 		}
 	default:
-		return c, errors.New("MCP_SEARCH_PROVIDER must be duckduckgo, brave or searxng")
+		return c, errors.New("MCP_SEARCH_PROVIDER must be duckduckgo, bing, brave or searxng")
 	}
 	if u, err := url.Parse(c.SearchURL); err != nil || !validWebURL(u) {
 		return c, errors.New("MCP_SEARCH_URL must be a public HTTP(S) URL on the default port without credentials or fragments")

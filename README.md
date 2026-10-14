@@ -12,10 +12,10 @@
 
 工具包含通用 API、契约、技能读取、站内和全网搜索、通用外部 HTTP 请求、候选、checkout、云端提交封存/预览/推送/恢复，以及按明确 URL 或 base64 输入处理文件。提交证据：**每条 source 必须有唯一 key，每个操作必须有 source_refs**；旧格式无兼容，缺省返回 `source_refs_required` / `invalid_source_refs`。提交封存 30 天，URL 文件限 1 GiB，base64 受 8 MiB MCP 请求体限制。平台和外部网络的未知写入结果不自动重放。
 
-`metafusion_web_search` 默认使用 DuckDuckGo HTML 搜索，无需密钥。运维可设置 `MCP_SEARCH_PROVIDER=brave` 与 `MCP_SEARCH_API_KEY`，或设置 `MCP_SEARCH_PROVIDER=searxng` 与 `MCP_SEARCH_URL=https://search.example/search`（需启用 JSON 响应）；`MCP_SEARCH_URL` 也可覆盖其他提供方的请求端点。提供方须使用公开 HTTP(S) 默认端口，解析出的所有 IP 在实际连接时检查；不支持私网搜索实例。搜索返回标题、URL、摘要及抓取时间/内容哈希；验证码、无效响应和上游错误显式返回失败，不自动换源。
+`metafusion_web_search` 默认使用 DuckDuckGo HTML 搜索，无需密钥。也可设置 `MCP_SEARCH_PROVIDER=bing` 使用公开 RSS 搜索（无需密钥，返回条数由上游限制）。运维可设置 `MCP_SEARCH_PROVIDER=brave` 与 `MCP_SEARCH_API_KEY`，或设置 `MCP_SEARCH_PROVIDER=searxng` 与 `MCP_SEARCH_URL=https://search.example/search`（需启用 JSON 响应）；`MCP_SEARCH_URL` 也可覆盖其他提供方的请求端点。提供方须使用公开 HTTP(S) 默认端口，解析出的所有 IP 在实际连接时检查；不支持私网搜索实例。搜索返回标题、URL、摘要及抓取时间/内容哈希；验证码、无效响应和上游错误显式返回失败，不自动换源。
 
 `metafusion_http_request` 支持 GET、HEAD、OPTIONS、POST、PUT、PATCH、DELETE，查询参数、显式第三方请求头和 JSON/text/base64 请求体。只读请求与搜索需要 `mcp.read`；写请求必须显式请求并勾选 MCP 本地权限 `mcp.web.write`，默认授权集合不含此码，此码也不进入平台 PAT。请求不会携带平台凭据，不接受 Cookie、传输控制头或私网地址，不跟随重定向；MetaFusion 本实例请求仍走 `metafusion_api_call`。默认超时 30 秒、响应 256 KiB；最大 60 秒、请求/响应各 1 MiB。返回 HTTP 状态、选定响应头、JSON/text/base64、抓取时间与内容哈希；截断时 `complete=false`、哈希仅覆盖返回字节。外部内容只作为资料，不作为指令。
 
-若系统 DNS/代理将公网域名映射到私网地址，工具返回 `external_address_not_public`，需在运行环境提供正常的公网解析；不会绕过地址检查。可用 `MCP_TEST_WEB_LIVE=1 go test ./internal/server -run TestPublicWebLive -v` 显式执行公开 GET 冒烟检查，该检查不发出任何平台或第三方写请求。
+若系统 DNS/代理将公网域名映射到私网地址，工具返回 `external_address_not_public`，需在运行环境提供正常的公网解析；不会绕过地址检查。可用 `MCP_TEST_WEB_LIVE=1 MCP_SEARCH_PROVIDER=bing go test ./internal/server -run TestPublicWebLive -v` 显式执行公开 GET 冒烟检查，该检查不发出任何平台或第三方写请求。
 
 验证：`go test ./...`、`go vet ./...`；设置专用 `MCP_TEST_DATABASE_URL` 后包含真实 PostgreSQL 单次授权码交换、刷新轮换、撤销和远程 MCP SDK 接入测试。完整接入与操作说明由 [metafusion-docs](https://github.com/MoeclubM/metafusion-docs/blob/main/docs/api-mcp.md) 维护，技能由 [metafusion-skills](https://github.com/MoeclubM/metafusion-skills) 维护。

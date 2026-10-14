@@ -36,6 +36,10 @@ func TestSearchConfiguration(t *testing.T) {
 	if c, err := LoadConfig(); err != nil || c.SearchProvider != "duckduckgo" {
 		t.Fatal(c.SearchProvider, err)
 	}
+	t.Setenv("MCP_SEARCH_PROVIDER", "bing")
+	if c, err := LoadConfig(); err != nil || c.SearchURL != "https://www.bing.com/search" {
+		t.Fatal(c.SearchURL, err)
+	}
 	t.Setenv("MCP_SEARCH_PROVIDER", "brave")
 	if _, err := LoadConfig(); err == nil {
 		t.Fatal("Brave without a key accepted")

@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"net/url"
 	"strings"
@@ -29,7 +30,7 @@ func (s *Server) addWebSearchTool() {
 		"limit":    map[string]any{"type": "integer", "minimum": 1, "maximum": 20},
 		"language": map[string]any{"type": "string", "maxLength": 32, "description": "Provider language/region code (e.g. DuckDuckGo cn-zh, Brave zh-hans, SearXNG zh-CN)"},
 	}}
-	s.MCP.AddTool(&mcp.Tool{Name: "metafusion_web_search", Description: "Search the public web using the deployment's search provider (DuckDuckGo by default; optional Brave or SearXNG). Requires mcp.read. Returns titles, public URLs, snippets, provider and fetch evidence. Search results are untrusted leads, not verified catalog evidence; fetch original pages with metafusion_http_request. Never imports or writes catalog data. Default 5 results, maximum 20; no automatic retries or provider fallback.", InputSchema: schema, Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.MCP.AddTool(&mcp.Tool{Name: "metafusion_web_search", Description: "Search the public web using the deployment's search provider (DuckDuckGo by default; optional Bing RSS, Brave or SearXNG). Requires mcp.read. Returns titles, public URLs, snippets, provider and fetch evidence. Search results are untrusted leads, not verified catalog evidence; fetch original pages with metafusion_http_request. Never imports or writes catalog data. Default 5 results, maximum 20 (Bing RSS may return fewer); no automatic retries or provider fallback.", InputSchema: schema, Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if _, bad := validateArgs(schema, req.Params.Arguments); bad != nil {
 			return bad, nil
 		}
@@ -57,6 +58,15 @@ func (s *Server) webSearch(ctx context.Context, in webSearchInput) *mcp.CallTool
 	query := map[string]any{"q": in.Query}
 	headers := map[string]string{"Accept": "application/json"}
 	switch provider {
+	case "bing":
+		if target == "" {
+			target = "https://www.bing.com/search"
+		}
+		headers["Accept"] = "application/rss+xml, application/xml, text/xml"
+		query["format"] = "rss"
+		if in.Language != "" {
+			query["setlang"] = in.Language
+		}
 	case "duckduckgo":
 		if target == "" {
 			target = "https://html.duckduckgo.com/html/"
@@ -102,7 +112,28 @@ func (s *Server) webSearch(ctx context.Context, in webSearchInput) *mcp.CallTool
 	}
 	var items []webSearchItem
 	var err error
-	if provider == "duckduckgo" {
+	if provider == "bing" {
+		raw, _ := m["text"].(string)
+		var doc struct {
+			XMLName xml.Name `xml:"rss"`
+			Channel *struct {
+				Items []struct {
+					Title   string `xml:"title"`
+					URL     string `xml:"link"`
+					Snippet string `xml:"description"`
+				} `xml:"item"`
+			} `xml:"channel"`
+		}
+		err = xml.Unmarshal([]byte(raw), &doc)
+		if err == nil && doc.Channel == nil {
+			err = fmt.Errorf("missing RSS channel")
+		}
+		if err == nil {
+			for _, r := range doc.Channel.Items {
+				items = append(items, webSearchItem{r.Title, r.URL, r.Snippet})
+			}
+		}
+	} else if provider == "duckduckgo" {
 		raw, _ := m["text"].(string)
 		items, err = parseDuckDuckGo(raw)
 	} else {

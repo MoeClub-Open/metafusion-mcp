@@ -10,7 +10,11 @@ func TestPublicWebLive(t *testing.T) {
 	if os.Getenv("MCP_TEST_WEB_LIVE") != "1" {
 		t.Skip("MCP_TEST_WEB_LIVE=1 enables public read-only smoke checks")
 	}
-	s := New(testConfig("https://platform.example"), nil)
+	c := testConfig("https://platform.example")
+	c.SearchProvider = os.Getenv("MCP_SEARCH_PROVIDER")
+	c.SearchURL = os.Getenv("MCP_SEARCH_URL")
+	c.SearchAPIKey = os.Getenv("MCP_SEARCH_API_KEY")
+	s := New(c, nil)
 	defer s.WebHTTP.CloseIdleConnections()
 	ctx := webContext("mcp.read")
 	t.Run("http", func(t *testing.T) {
