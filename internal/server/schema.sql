@@ -35,3 +35,11 @@ INSERT INTO mcp.schema_version(version) VALUES(1) ON CONFLICT DO NOTHING;
 -- Grant authorizations no longer expire: clear legacy deadlines so existing rows stay valid until revoked.
 ALTER TABLE mcp.grants ALTER COLUMN expires_at DROP NOT NULL;
 UPDATE mcp.grants SET expires_at = NULL WHERE expires_at IS NOT NULL;
+-- Retired permission catalog.import.submit: strip from grant scopes (no alias).
+UPDATE mcp.grants
+SET scopes = COALESCE((
+  SELECT jsonb_agg(s)
+  FROM jsonb_array_elements_text(scopes) AS s
+  WHERE s <> 'catalog.import.submit'
+), '[]'::jsonb)
+WHERE scopes @> '["catalog.import.submit"]'::jsonb;

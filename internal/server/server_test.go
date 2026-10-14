@@ -35,7 +35,7 @@ func TestRequestedBusinessScopes(t *testing.T) {
 		{"omitted scopes offer minimal consent", "", []string{"mcp.read", "catalog.entity.edit"}, false},
 		{"wildcard cannot be delegated", "mcp.read *", nil, true},
 		{"management cannot be delegated", "mcp.read catalog.definitions.manage", nil, true},
-		{"import submit is dropped silently", "openid mcp.read catalog.import.submit", []string{"mcp.read"}, false},
+		{"import submit is rejected (no silent drop / no alias)", "openid mcp.read catalog.import.submit", nil, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := requestedBusinessScopes(tc.raw)
@@ -292,8 +292,8 @@ func TestProxyPublicOriginAssets(t *testing.T) {
 		t.Fatalf("proxy Origin rejected as origin_not_allowed: %q", w.Body.String())
 	}
 }
-func TestFilterSupportedScopesDropsImport(t *testing.T) {
-	got := filterSupportedScopes([]string{"mcp.read", "catalog.import.submit", "catalog.entity.edit", "catalog.import.submit"})
+func TestFilterSupportedScopesDropsUnsupported(t *testing.T) {
+	got := filterSupportedScopes([]string{"mcp.read", "catalog.import.submit", "catalog.entity.edit", "not.a.scope"})
 	want := []string{"mcp.read", "catalog.entity.edit"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v want %v", got, want)

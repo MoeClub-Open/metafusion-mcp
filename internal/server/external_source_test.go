@@ -4,21 +4,20 @@ import (
 	"testing"
 )
 
-func TestRequestedBusinessScopesDropsImportSubmit(t *testing.T) {
-	got, err := requestedBusinessScopes("openid mcp.read catalog.import.submit catalog.entity.edit")
+func TestRequestedBusinessScopesRejectsImportSubmit(t *testing.T) {
+	// No silent drop / no alias: retired catalog.import.submit is invalid_scope.
+	if _, err := requestedBusinessScopes("openid mcp.read catalog.import.submit catalog.entity.edit"); err == nil {
+		t.Fatal("mixed request containing catalog.import.submit must be invalid_scope")
+	}
+	if _, err := requestedBusinessScopes("catalog.import.submit"); err == nil {
+		t.Fatal("import-only request must be invalid_scope")
+	}
+	got, err := requestedBusinessScopes("openid mcp.read catalog.entity.edit")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, s := range got {
-		if s == "catalog.import.submit" {
-			t.Fatal("import submit must be dropped silently")
-		}
-	}
 	if len(got) != 2 || got[0] != "mcp.read" || got[1] != "catalog.entity.edit" {
 		t.Fatalf("got %v", got)
-	}
-	if _, err := requestedBusinessScopes("catalog.import.submit"); err == nil {
-		t.Fatal("import-only request must fail as invalid_scope (no remaining business scopes)")
 	}
 }
 
@@ -44,4 +43,3 @@ func TestReadOperationExternalSourceQuery(t *testing.T) {
 		}
 	}
 }
-
