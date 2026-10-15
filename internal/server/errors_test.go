@@ -155,6 +155,23 @@ func TestCommitPrepareSchema(t *testing.T) {
 	}
 }
 
+func TestArticleAndExternalLinkCommitSchema(t *testing.T) {
+	schema := commitPrepareSchema()
+	commit := validCommit()
+	doc := commit["operations"].([]any)[0].(map[string]any)["document"].(map[string]any)
+	doc["translations"] = map[string]any{"zh-CN": map[string]any{"title": "条目", "body": "## 背景\n正文与结构化事实一同修订"}}
+	link := doc["external_links"].([]any)[0].(map[string]any)
+	link["source_refs"] = []any{map[string]any{"source": "label", "pointers": []any{"/external_links/0"}}}
+	link["role"] = "official"
+	if issues := validateSchema(schema, roundTrip(commit)); len(issues) != 0 {
+		t.Fatal("article or link evidence rejected", issues)
+	}
+	doc["external_ids"] = map[string]any{"vgmdb": "1"}
+	if issues := validateSchema(schema, roundTrip(commit)); len(issues) == 0 {
+		t.Fatal("retired external_ids accepted")
+	}
+}
+
 func TestQuerySchemas(t *testing.T) {
 	cand := withDefs(shortcutSchema(candidateQuerySchema()))
 	if is := validateSchema(cand, roundTrip(map[string]any{"body": map[string]any{"kind": "work", "titles": []any{"day by day"}, "limit": 50}})); len(is) != 0 {

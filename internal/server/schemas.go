@@ -54,7 +54,7 @@ func catalogDefs() map[string]any {
 		// not field-level evidence for that revision.
 		"Source":      obj(map[string]any{"kind": map[string]any{"type": "string", "enum": []string{"url", "publication", "self"}}, "citation": str(), "url": str(), "key": str(), "pointers": arr(str()), "scope": map[string]any{"type": "string", "enum": []string{"commit"}}}),
 		"TimeSpan":    obj(map[string]any{"begin": str(), "end": str()}),
-		"Translation": obj(map[string]any{"title": str(), "summary": str(), "aliases": arr(str())}),
+		"Translation": obj(map[string]any{"title": str(), "summary": str(), "body": map[string]any{"type": "string", "maxLength": 100000}, "aliases": arr(str())}),
 		"Inclusion":   obj(map[string]any{"expression_id": ref("IDOrRef"), "position": map[string]any{"type": "integer"}, "locator": freeObject(), "attributes": freeObject(), "sources": arr(ref("Source"))}),
 		"Picture":     obj(map[string]any{"url": str(), "asset_id": str(), "role": str(), "caption": stringMap(), "version_label": stringMap(), "taken_at": str(), "usage_period": ref("TimeSpan"), "source": ref("Source")}),
 		"Subject":     obj(map[string]any{"work_id": ref("IDOrRef"), "role": str(), "position": map[string]any{"type": "integer"}, "attributes": freeObject()}),
@@ -62,7 +62,7 @@ func catalogDefs() map[string]any {
 			"id": ref("IDOrRef"), "kind": map[string]any{"type": "string", "enum": entityKinds}, "title": str(), "status": str(), "version": map[string]any{"type": "integer"},
 			"original_language": str(), "number": str(), "position": map[string]any{"type": "integer"},
 			"parent_id": ref("IDOrRef"), "work_id": ref("IDOrRef"), "content_unit_id": ref("IDOrRef"), "release_id": ref("IDOrRef"), "medium_id": ref("IDOrRef"), "redirect_id": ref("IDOrRef"),
-			"attributes": freeObject(), "external_links": arr(obj(map[string]any{"kind": map[string]any{"type": "string", "minLength": 1}, "url": map[string]any{"type": "string", "minLength": 1}, "external_id": map[string]any{"type": "string"}, "role": map[string]any{"type": "string"}, "origin": map[string]any{"type": "string"}}, "kind", "url"), "maxItems", 50), "translations": map[string]any{"type": "object", "additionalProperties": ref("Translation")},
+			"attributes": freeObject(), "external_links": arr(obj(map[string]any{"kind": map[string]any{"type": "string", "minLength": 1, "maxLength": 64}, "url": map[string]any{"type": "string", "minLength": 1, "maxLength": 2000}, "external_id": map[string]any{"type": "string", "maxLength": 2000}, "role": map[string]any{"type": "string", "enum": []string{"", "official", "primary", "secondary", "operator"}}, "origin": map[string]any{"type": "string", "enum": []string{"", "migration", "commit"}}, "source_refs": ref("SourceRefs")}, "kind", "url"), "maxItems", 50), "translations": map[string]any{"type": "object", "additionalProperties": ref("Translation")},
 			"contents": arr(ref("Inclusion")), "pictures": arr(ref("Picture"), "maxItems", 40), "subjects": arr(ref("Subject")),
 			"created_by": str(), "updated_at": str(),
 		}, "kind"),
@@ -105,14 +105,14 @@ func commitPrepareSchema() map[string]any {
 func candidateQuerySchema() map[string]any {
 	val := map[string]any{"type": "string", "maxLength": 256}
 	return obj(map[string]any{
-		"kind":         map[string]any{"type": "string", "enum": entityKinds},
-		"titles":       arr(val, "maxItems", 20),
+		"kind":           map[string]any{"type": "string", "enum": entityKinds},
+		"titles":         arr(val, "maxItems", 20),
 		"external_links": arr(obj(map[string]any{"kind": map[string]any{"type": "string", "minLength": 1}, "value": val}, "kind", "value"), "maxItems", 20),
-		"attributes":   arr(obj(map[string]any{"key": map[string]any{"type": "string", "minLength": 1}, "value": val}, "key", "value"), "maxItems", 20),
-		"work_id":      map[string]any{"type": "string", "format": "uuid"},
-		"release_id":   map[string]any{"type": "string", "format": "uuid"},
-		"medium_id":    map[string]any{"type": "string", "format": "uuid"},
-		"limit":        map[string]any{"type": "integer", "minimum": 1, "maximum": 1000},
+		"attributes":     arr(obj(map[string]any{"key": map[string]any{"type": "string", "minLength": 1}, "value": val}, "key", "value"), "maxItems", 20),
+		"work_id":        map[string]any{"type": "string", "format": "uuid"},
+		"release_id":     map[string]any{"type": "string", "format": "uuid"},
+		"medium_id":      map[string]any{"type": "string", "format": "uuid"},
+		"limit":          map[string]any{"type": "integer", "minimum": 1, "maximum": 1000},
 	}, "kind")
 }
 

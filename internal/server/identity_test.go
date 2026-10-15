@@ -44,7 +44,8 @@ func TestIdentityCheckTool(t *testing.T) {
 	r, e := cs.CallTool(ctx, &mcp.CallToolParams{Name: "catalog_identity_check", Arguments: map[string]any{
 		"queries": []any{map[string]any{
 			"key": "song1", "kind": "work", "titles": []any{"Shared"},
-			"context": map[string]any{"creator": []any{gOther}, "catalog_number": []any{"CAT-1"}},
+			"external_links": []any{map[string]any{"kind": "wikidata", "value": "Q123"}},
+			"context":        map[string]any{"creator": []any{gOther}, "catalog_number": []any{"CAT-1"}},
 		}},
 	}})
 	if e != nil {
@@ -73,6 +74,10 @@ func TestIdentityCheckTool(t *testing.T) {
 	queries := gotBody["queries"].([]any)
 	if len(queries) != 1 || queries[0].(map[string]any)["key"] != "song1" {
 		t.Fatal(gotBody)
+	}
+	links := queries[0].(map[string]any)["external_links"].([]any)
+	if links[0].(map[string]any)["kind"] != "wikidata" || links[0].(map[string]any)["value"] != "Q123" {
+		t.Fatal("external link identity changed in transit", gotBody)
 	}
 
 	r, _ = cs.CallTool(ctx, &mcp.CallToolParams{Name: "catalog_identity_check", Arguments: map[string]any{"queries": []any{}}})
