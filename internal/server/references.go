@@ -8,11 +8,11 @@ import (
 	"strings"
 )
 
-var referencePath = regexp.MustCompile(`^(skills/[a-z0-9-]+/(SKILL|reference-[a-z0-9-]+)\.md|docs/[a-z0-9-]+\.md)$`)
+var referencePath = regexp.MustCompile(`^(skills/[a-z0-9-]+/(SKILL\.md|references/[a-z0-9-]+\.md)|docs/[a-z0-9-]+\.md)$`)
 var revisionPattern = regexp.MustCompile(`^[a-f0-9]{40}$`)
 
 func (s *Server) addSkillTools() {
-	s.MCP.AddTool(&mcp.Tool{Name: "metafusion_reference", Description: "Read canonical MetaFusion skills or API manuals in the cloud. source=skills, path=skills/metafusion-curator/SKILL.md or linked reference-*.md; source=docs, path=docs/api-storage.md, docs/api-community.md, docs/api-auth.md. Source revisions are pinned by deployment. No local execution required.", InputSchema: map[string]any{"type": "object", "required": []string{"source", "path"}, "properties": map[string]any{"source": map[string]any{"type": "string", "enum": []string{"skills", "docs"}}, "path": map[string]string{"type": "string"}}}, Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, r *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.MCP.AddTool(&mcp.Tool{Name: "metafusion_reference", Description: "Read canonical MetaFusion skills or API manuals in the cloud. source=skills, path=skills/metafusion-curator/SKILL.md or linked references/*.md; source=docs, path=docs/api-storage.md, docs/api-community.md, docs/api-auth.md. Source revisions are pinned by deployment. No local execution required.", InputSchema: map[string]any{"type": "object", "required": []string{"source", "path"}, "properties": map[string]any{"source": map[string]any{"type": "string", "enum": []string{"skills", "docs"}}, "path": map[string]string{"type": "string"}}}, Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, r *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		var in struct {
 			Source string `json:"source"`
 			Path   string `json:"path"`

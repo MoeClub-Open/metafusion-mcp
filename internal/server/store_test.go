@@ -161,7 +161,7 @@ func TestPostgresOAuthToRemoteMCP(t *testing.T) {
 				permissions = append(permissions, "catalog.entity.edit")
 			}
 			writeJSON(w, 200, User{ID: "oauth-test-user", Username: "editor", Permissions: permissions, TokenUse: "session"})
-		case "/api/auth/tokens":
+		case "/api/auth/mcp-tokens":
 			if r.Method == "POST" {
 				var in struct {
 					Scopes []string `json:"scopes"`

@@ -243,7 +243,7 @@ func TestMCPLandingPage(t *testing.T) {
 	req.Header.Set("Accept", "text/html")
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)
-	if w.Code != 200 || !strings.Contains(w.Body.String(), "MCP") || !strings.Contains(w.Header().Get("Content-Type"), "text/html") {
+	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "https://site.test/developer?tab=mcp" {
 		t.Fatalf("landing status=%d type=%q body=%q", w.Code, w.Header().Get("Content-Type"), w.Body.String())
 	}
 	api := httptest.NewRequest("GET", "https://site.test/mcp", nil)

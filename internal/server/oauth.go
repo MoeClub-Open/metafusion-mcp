@@ -210,21 +210,21 @@ func (s *Server) approve(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	g := Grant{ID: randomToken(), UserID: u.ID, ClientID: a.Client.ID, Scopes: in.Scopes}
-	id, pat, e := s.mintPAT(r.Context(), cookie, a.Client.Name, in.Scopes)
+	id, pat, e := s.mintCredential(r.Context(), cookie, a.Client.Name, in.Scopes)
 	if e != nil {
-		writeError(w, 503, "pat_creation_failed")
+		writeError(w, 503, "credential_creation_failed")
 		return
 	}
 	g.PATID = id
 	g.Cipher, e = encrypt(s.Config.Key, g.ID, pat)
 	if e != nil {
-		_ = s.deletePAT(r.Context(), cookie, id)
+		_ = s.revokeCredential(r.Context(), cookie, id)
 		writeError(w, 500, "encryption_failed")
 		return
 	}
 	code := randomToken()
 	if e = s.Store.SaveCode(r.Context(), g, code, a.Redirect, a.Challenge); e != nil {
-		_ = s.deletePAT(r.Context(), cookie, id)
+		_ = s.revokeCredential(r.Context(), cookie, id)
 		writeError(w, 503, "authorization_unavailable")
 		return
 	}
@@ -285,9 +285,25 @@ func (s *Server) revokeToken(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_request")
 		return
 	}
-	if e := s.Store.RevokeToken(r.Context(), r.PostForm.Get("client_id"), r.PostForm.Get("token")); e != nil {
+	g, found, e := s.Store.RevokeToken(r.Context(), r.PostForm.Get("client_id"), r.PostForm.Get("token"))
+	if e != nil {
 		writeError(w, 503, "revoke_unavailable")
 		return
 	}
-	w.WriteHeader(200)
+	cleanup := true
+	if found {
+		if g.PATID != "" {
+			plain, err := decrypt(s.Config.Key, g.ID, g.Cipher)
+			if err != nil || plain == "" {
+				cleanup = false
+			} else {
+				status, _, err := s.request(r.Context(), "POST", s.Config.AuthURL+"/api/auth/mcp-tokens/revoke", "", "", map[string]string{"token": plain})
+				cleanup = err == nil && status == http.StatusOK
+			}
+		}
+		if cleanup {
+			cleanup = s.Store.ClearRevokedCredential(r.Context(), g)
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"upstream_token_revoked": cleanup})
 }

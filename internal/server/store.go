@@ -20,16 +20,17 @@ type Client struct {
 	Redirects []string `json:"redirect_uris"`
 }
 type Grant struct {
-	ID            string     `json:"id"`
-	UserID        string     `json:"-"`
-	ClientID      string     `json:"client_id"`
-	ClientName    string     `json:"client_name"`
-	Scopes        []string   `json:"scopes"`
-	PATID         string     `json:"pat_id,omitempty"`
-	Cipher        []byte     `json:"-"`
-	Expires       *time.Time `json:"expires_at,omitempty"`
-	Revoked       *time.Time `json:"revoked_at"`
-	AccessExpires time.Time  `json:"-"` // short access TTL from mcp.tokens.access_expires_at; for Bearer TokenInfo only
+	ID             string     `json:"id"`
+	UserID         string     `json:"-"`
+	ClientID       string     `json:"client_id"`
+	ClientName     string     `json:"client_name"`
+	Scopes         []string   `json:"scopes"`
+	PATID          string     `json:"pat_id,omitempty"`
+	Cipher         []byte     `json:"-"`
+	Expires        *time.Time `json:"expires_at,omitempty"`
+	Revoked        *time.Time `json:"revoked_at"`
+	AccessExpires  time.Time  `json:"-"` // short access TTL from mcp.tokens.access_expires_at; for Bearer TokenInfo only
+	CleanupPending bool       `json:"cleanup_pending"`
 }
 type Store struct{ DB *sql.DB }
 
@@ -216,7 +217,25 @@ func (s *Store) Revoke(ctx context.Context, user, id string) error {
 	}
 	return tx.Commit()
 }
-func (s *Store) RevokeToken(ctx context.Context, client, token string) error {
-	_, e := s.DB.ExecContext(ctx, `UPDATE mcp.tokens t SET revoked_at=COALESCE(t.revoked_at,now()) FROM mcp.grants g WHERE t.grant_id=g.id AND g.client_id=$1 AND (t.access_hash=$2 OR t.refresh_hash=$2)`, client, hash(token))
-	return e
+func (s *Store) RevokeToken(ctx context.Context, client, token string) (Grant, bool, error) {
+	g, err := scanGrant(s.DB.QueryRowContext(ctx, grantSelect+" JOIN mcp.tokens t ON t.grant_id=g.id WHERE g.client_id=$1 AND (t.access_hash=$2 OR t.refresh_hash=$2)", client, hash(token)))
+	if errors.Is(err, sql.ErrNoRows) {
+		return Grant{}, false, nil
+	}
+	if err != nil {
+		return Grant{}, false, err
+	}
+	if err = s.Revoke(ctx, g.UserID, g.ID); err != nil {
+		return Grant{}, false, err
+	}
+	return g, true, nil
+}
+
+func (s *Store) ClearRevokedCredential(ctx context.Context, g Grant) bool {
+	result, err := s.DB.ExecContext(ctx, "UPDATE mcp.grants SET pat_id='',pat_cipher=''::bytea WHERE id=$1 AND user_id=$2 AND revoked_at IS NOT NULL", g.ID, g.UserID)
+	if err != nil {
+		return false
+	}
+	n, err := result.RowsAffected()
+	return err == nil && n == 1
 }

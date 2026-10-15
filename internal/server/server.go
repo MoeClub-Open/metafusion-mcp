@@ -98,7 +98,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /mcp/oauth/authorize", s.authorize)
 	mux.HandleFunc("POST /mcp/oauth/token", s.token)
 	mux.HandleFunc("POST /mcp/oauth/revoke", s.revokeToken)
-	mux.HandleFunc("GET /mcp/manage", s.page)
+	mux.HandleFunc("GET /mcp/manage", s.managePage)
 	mux.HandleFunc("GET /mcp/assets/{file}", s.asset)
 	mux.HandleFunc("GET /mcp/manage/api/me", s.me)
 	mux.HandleFunc("GET /mcp/manage/api/grants", s.grants)
@@ -110,7 +110,7 @@ func (s *Server) Handler() http.Handler {
 	protected := auth.RequireBearerToken(s.verify, &auth.RequireBearerTokenOptions{ResourceMetadataURL: s.Config.PublicURL + "/.well-known/oauth-protected-resource/mcp"})(transport)
 	mux.Handle("/mcp", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && !hasBearer(r) && acceptsHTML(r) {
-			s.page(w, r)
+			s.managePage(w, r)
 			return
 		}
 		protected.ServeHTTP(w, r)
@@ -340,21 +340,21 @@ func (s *Server) grants(w http.ResponseWriter, r *http.Request) {
 	}
 	for i := range g {
 		g[i].Scopes = filterSupportedScopes(g[i].Scopes)
+		g[i].CleanupPending = g[i].Revoked != nil && g[i].PATID != ""
 	}
 	writeJSON(w, 200, map[string]any{"items": g})
 }
-func (s *Server) mintPAT(ctx context.Context, cookie, name string, scopes []string) (string, string, error) {
+func (s *Server) mintCredential(ctx context.Context, cookie, name string, scopes []string) (string, string, error) {
 	permissions := []string{"mcp.connect"}
 	for _, scope := range scopes {
 		if !localScope(scope) {
 			permissions = append(permissions, scope)
 		}
 	}
-	// Omit expires_in_days: metafusion-auth treats missing/0 as never-expiring PAT,
-	// matching MCP grants that stay valid until the user revokes them.
-	status, b, e := s.request(ctx, "POST", s.Config.AuthURL+"/api/auth/tokens", cookie, "", map[string]any{"name": "MCP: " + name, "scopes": permissions})
+	// The dedicated credential stays valid until its connection is revoked.
+	status, b, e := s.request(ctx, "POST", s.Config.AuthURL+"/api/auth/mcp-tokens", cookie, "", map[string]any{"name": name, "scopes": permissions})
 	if e != nil || status != 201 {
-		return "", "", errors.New("pat_creation_failed")
+		return "", "", errors.New("credential_creation_failed")
 	}
 	var out struct {
 		Token string `json:"token"`
@@ -363,15 +363,15 @@ func (s *Server) mintPAT(ctx context.Context, cookie, name string, scopes []stri
 		} `json:"item"`
 	}
 	if json.Unmarshal(b, &out) != nil || out.Token == "" || out.Item.ID == "" {
-		return "", "", errors.New("invalid_pat_response")
+		return "", "", errors.New("invalid_credential_response")
 	}
 	return out.Item.ID, out.Token, nil
 }
-func (s *Server) deletePAT(ctx context.Context, cookie, id string) bool {
+func (s *Server) revokeCredential(ctx context.Context, cookie, id string) bool {
 	if id == "" {
 		return true
 	}
-	status, _, e := s.request(ctx, "DELETE", s.Config.AuthURL+"/api/auth/tokens/"+url.PathEscape(id), cookie, "", nil)
+	status, _, e := s.request(ctx, "DELETE", s.Config.AuthURL+"/api/auth/mcp-tokens/"+url.PathEscape(id), cookie, "", nil)
 	return e == nil && status == 200
 }
 func (s *Server) revokeGrant(w http.ResponseWriter, r *http.Request) {
@@ -400,7 +400,10 @@ func (s *Server) revokeGrant(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 503, "store_unavailable")
 		return
 	}
-	cleanup := s.deletePAT(r.Context(), cookie, g.PATID)
+	cleanup := s.revokeCredential(r.Context(), cookie, g.PATID)
+	if cleanup {
+		cleanup = s.Store.ClearRevokedCredential(r.Context(), *g)
+	}
 	writeJSON(w, 200, map[string]any{"revoked": true, "upstream_token_revoked": cleanup})
 }
 func (s *Server) updateGrant(w http.ResponseWriter, r *http.Request) {
@@ -442,19 +445,27 @@ func (s *Server) updateGrant(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	id, pat, e := s.mintPAT(r.Context(), cookie, g.ClientName, in.Scopes)
-	if e != nil {
-		writeError(w, 503, "pat_creation_failed")
+	// Narrow the existing upstream credential before changing the local grant.
+	// A local CAS failure leaves upstream permissions narrower, never broader;
+	// retrying the same narrowing is safe and creates no additional credential.
+	permissions := []string{"mcp.connect"}
+	for _, scope := range in.Scopes {
+		if !localScope(scope) {
+			permissions = append(permissions, scope)
+		}
+	}
+	status, _, upstreamErr := s.request(r.Context(), "PATCH", s.Config.AuthURL+"/api/auth/mcp-tokens/"+url.PathEscape(g.PATID), cookie, "", map[string]any{"scopes": permissions})
+	if upstreamErr != nil || status != http.StatusOK {
+		writeError(w, 503, "credential_update_failed")
 		return
 	}
-	cipher, e := encrypt(s.Config.Key, g.ID, pat)
-	if e != nil {
-		_ = s.deletePAT(r.Context(), cookie, id)
-		writeError(w, 500, "encryption_failed")
-		return
+	if plain, err := decrypt(s.Config.Key, g.ID, g.Cipher); err == nil {
+		s.cacheMu.Lock()
+		delete(s.cache, hash(plain))
+		s.cacheMu.Unlock()
 	}
 	b, _ := json.Marshal(in.Scopes)
-	result, e := s.Store.DB.ExecContext(r.Context(), "WITH changed AS (UPDATE mcp.grants SET scopes=$1,pat_id=$2,pat_cipher=$3 WHERE id=$4 AND user_id=$5 AND revoked_at IS NULL AND scopes=$6::jsonb RETURNING id) INSERT INTO mcp.audit(user_id,grant_id,action) SELECT $5,id,'grant.narrowed' FROM changed", string(b), id, cipher, g.ID, u.ID, mustJSON(g.Scopes))
+	result, e := s.Store.DB.ExecContext(r.Context(), "WITH changed AS (UPDATE mcp.grants SET scopes=$1 WHERE id=$2 AND user_id=$3 AND revoked_at IS NULL AND scopes=$4::jsonb RETURNING id) INSERT INTO mcp.audit(user_id,grant_id,action) SELECT $3,id,'grant.narrowed' FROM changed", string(b), g.ID, u.ID, mustJSON(g.Scopes))
 	if e == nil {
 		var n int64
 		n, e = result.RowsAffected()
@@ -463,12 +474,10 @@ func (s *Server) updateGrant(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if e != nil {
-		_ = s.deletePAT(r.Context(), cookie, id)
 		writeError(w, 409, "grant_changed")
 		return
 	}
-	cleanup := s.deletePAT(r.Context(), cookie, g.PATID)
-	writeJSON(w, 200, map[string]any{"updated": true, "upstream_token_revoked": cleanup})
+	writeJSON(w, 200, map[string]any{"updated": true, "upstream_token_updated": true})
 }
 func filterSupportedScopes(scopes []string) []string {
 	out := make([]string, 0, len(scopes))

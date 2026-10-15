@@ -128,16 +128,12 @@ const sessionMessage = document.getElementById('sessionMessage');
 const errorDetails = document.getElementById('errorDetails');
 const errorCode = document.getElementById('errorCode');
 const login = document.getElementById('login');
-const landing = document.getElementById('landing');
 const manageShell = document.getElementById('manageShell');
 const workspace = document.getElementById('workspace');
 const consent = document.getElementById('consent');
 const selectAllScopes = document.getElementById('selectAllScopes');
-const isLanding = location.pathname === '/mcp' || location.pathname === '/mcp/';
-const isAuthorize = location.pathname === '/mcp/oauth/authorize';
 
-landing.hidden = !isLanding;
-manageShell.hidden = isLanding;
+manageShell.hidden = false;
 
 function showSessionRequired(code) {
   workspace.hidden = true;
@@ -229,7 +225,7 @@ function scopePicker(container, available, checked) {
     const scopes = group.scopes.filter(scope => availableSet.has(scope));
     if (!scopes.length) continue;
     const details = element('details', undefined, 'scope-group');
-    details.open = true;
+    details.open = false;
     const summary = element('summary');
     summary.append(element('span', words.groups[group.id].title));
     summary.append(element('span', words.groups[group.id].description, 'scope-group-desc'));
@@ -286,24 +282,9 @@ function busy(button, fn) {
   return fn().catch(showError).finally(() => { button.disabled = false; });
 }
 
-function statusFor(grant) {
-  if (grant.revoked_at) return { key: 'revoked', className: 'revoked' };
-  return { key: 'active', className: 'active' };
-}
-
 const request = location.search.slice(1);
 
 async function refresh() {
-  if (isLanding) {
-    try {
-      await api('me');
-      document.getElementById('landingLogin').hidden = true;
-    } catch (error) {
-      if (error.status === 401) document.getElementById('landingLogin').hidden = false;
-    }
-    return;
-  }
-
   sessionBanner.hidden = true;
   login.hidden = true;
   errorDetails.hidden = true;
@@ -312,71 +293,15 @@ async function refresh() {
   document.getElementById('identity').textContent = `${words.signedIn}: ${user.username}`;
   document.getElementById('endpoint').textContent = endpoint;
 
-  let authorization = null;
-  if (isAuthorize) {
-    authorization = await api(`authorization?${request}`);
-    document.getElementById('client').textContent = `${authorization.client.client_name} (${authorization.client.client_id})`;
-    document.getElementById('callback').textContent = `${words.callback}: ${authorization.redirect_uri}`;
-    const allowed = authorization.scopes.filter(scope => scopes.includes(scope) || user.permissions.includes('*'));
-    // Writes, including third-party HTTP writes, require an explicit checkbox selection.
-    scopePicker(document.getElementById('scopes'), allowed, allowed.filter(scope => scope === 'mcp.read'));
-    consent.hidden = false;
-  } else {
-    consent.hidden = true;
-  }
-
-  const { items } = await api('grants');
-  const container = document.getElementById('grants');
-  container.replaceChildren();
-  if (!items.length) container.append(element('p', words.empty));
-  for (const grant of items) {
-    const card = element('article', undefined, 'grant');
-    const head = element('div', undefined, 'grant-head');
-    head.append(element('h3', grant.client_name));
-    const status = statusFor(grant);
-    head.append(element('span', words.status[status.key], `status ${status.className}`));
-    card.append(head);
-    card.append(element('p', `client_id: ${grant.client_id}`, 'meta'));
-    if (grant.revoked_at) {
-      container.append(card);
-      continue;
-    }
-    const picker = element('div', undefined, 'scope-groups');
-    const visibleScopes = (grant.scopes || []).filter(scope => SCOPE_GROUPS.some(group => group.scopes.includes(scope)));
-    scopePicker(picker, visibleScopes, visibleScopes);
-    card.append(picker);
-    const buttons = element('div', undefined, 'buttons');
-    const save = element('button', words.save);
-    const reauth = element('button', words.reauthorize, 'secondary');
-    const revoke = element('button', words.revokeAll, 'danger');
-    buttons.append(save, reauth, revoke);
-    card.append(buttons);
-    save.onclick = () => busy(save, async () => {
-      const next = selected(picker);
-      if (!next.length) throw Object.assign(new Error('invalid_scope'), { code: 'invalid_scope' });
-      const response = await api(`grants/${encodeURIComponent(grant.id)}`, { method: 'PATCH', body: JSON.stringify({ scopes: next }) });
-      await refresh();
-      notice.className = 'ok';
-      notice.textContent = response.upstream_token_revoked ? words.copied : words.cleanup;
-    });
-    reauth.onclick = () => {
-      notice.className = '';
-      notice.textContent = words.reauthHelp;
-    };
-    revoke.onclick = () => {
-      if (!window.confirm(words.confirmRevoke)) return;
-      return busy(revoke, async () => {
-        const response = await api(`grants/${encodeURIComponent(grant.id)}`, { method: 'DELETE' });
-        await refresh();
-        if (!response.upstream_token_revoked) {
-          notice.className = '';
-          notice.textContent = words.cleanup;
-        }
-      });
-    };
-    container.append(card);
-  }
+  const authorization = await api(`authorization?${request}`);
+  document.getElementById('client').textContent = `${authorization.client.client_name} (${authorization.client.client_id})`;
+  document.getElementById('callback').textContent = `${words.callback}: ${authorization.redirect_uri}`;
+  const allowed = authorization.scopes.filter(scope => scopes.includes(scope) || user.permissions.includes('*'));
+  // Writes, including third-party HTTP writes, require an explicit checkbox selection.
+  scopePicker(document.getElementById('scopes'), allowed, allowed.filter(scope => scope === 'mcp.read'));
+  consent.hidden = false;
 }
+
 
 for (const [id, allow] of [['approve', true], ['deny', false]]) {
   const button = document.getElementById(id);

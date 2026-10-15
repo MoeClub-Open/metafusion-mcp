@@ -6,7 +6,9 @@
 
 检查：`go test ./...`、`go vet ./...`、`go build ./cmd/mcp`。数据库集成测试通过 `MCP_TEST_DATABASE_URL` 使用专用测试库。提交只暂存本任务明确路径。
 
-外部搜索/HTTP 使用独立 publicClient，连接时校验并固定公开 IP，不携带平台凭据、不跟随重定向、不自动重放。GET/HEAD/OPTIONS 与搜索要求 `mcp.read`；POST/PUT/PATCH/DELETE 要求显式同意的本地 scope `mcp.web.write`。本地 scope 不进平台 PAT，也不能放行平台 API 写入。提供方由 MCP_SEARCH_PROVIDER/URL/API_KEY 配置，密钥不进工具结果或日志。
+外部搜索/HTTP 使用独立 publicClient，连接时校验并固定公开 IP，不携带平台凭据、不跟随重定向、不自动重放。GET/HEAD/OPTIONS 与搜索要求 `mcp.read`；POST/PUT/PATCH/DELETE 要求显式同意的本地 scope `mcp.web.write`。本地 scope 不进平台委托凭据，也不能放行平台 API 写入。提供方由 MCP_SEARCH_PROVIDER/URL/API_KEY 配置，密钥不进工具结果或日志。
+
+MCP 使用专用委托凭据，与个人 API Key 分别管理和计额；缩减权限更新原凭据。客户端撤销后关闭连接并清理凭据，失败保留可重试状态，不重新签发、不自动重放未知写请求。凭完整委托凭据的撤销证明只允许撤销其自身，不允许编辑、签发或操作个人密钥。
 
 ## 提交证据（破坏性）
 

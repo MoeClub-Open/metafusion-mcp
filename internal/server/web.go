@@ -9,6 +9,11 @@ import (
 //go:embed web/*
 var web embed.FS
 
+// Keep one management UI; the standalone page is only for OAuth consent.
+func (s *Server) managePage(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, s.Config.PublicURL+"/developer?tab=mcp", http.StatusSeeOther)
+}
+
 func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 	b, e := web.ReadFile("web/index.html")
 	if e != nil {

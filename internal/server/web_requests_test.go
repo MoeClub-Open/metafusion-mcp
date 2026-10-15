@@ -227,7 +227,7 @@ func TestWebWriteScopeNeverEntersPlatformPATOrAuthorizesAPIWrites(t *testing.T) 
 	}))
 	defer up.Close()
 	s := New(testConfig(up.URL), nil)
-	if _, _, err := s.mintPAT(context.Background(), "test-cookie", "test-client", []string{"mcp.read", "mcp.web.write"}); err != nil {
+	if _, _, err := s.mintCredential(context.Background(), "test-cookie", "test-client", []string{"mcp.read", "mcp.web.write"}); err != nil {
 		t.Fatal(err)
 	}
 	m := structured(t, s.callAPI(webContext("mcp.read", "mcp.web.write"), APIInput{Method: "POST", Path: "/api/catalog/entities", Body: map[string]any{}}))

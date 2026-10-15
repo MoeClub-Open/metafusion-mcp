@@ -105,6 +105,7 @@ main {
 h1 { font-size: 1.75rem; margin: 0 0 12px; color: var(--text-strong-color); }
 h2 { font-size: 1.15rem; margin: 28px 0 10px; color: var(--text-strong-color); }
 p, label, legend { line-height: 1.65; color: var(--text-body-color); }
+#client, #callback { overflow-wrap: anywhere; }
 a { color: var(--primary-color); }
 code {
   display: block;
@@ -146,10 +147,6 @@ button.secondary, .button.secondary {
   background: transparent;
   border-color: var(--line-color);
 }
-button.danger {
-  background: rgb(var(--state-danger-rgb));
-  color: #fff;
-}
 .buttons { display: flex; flex-wrap: wrap; gap: 12px; margin: 18px 0; }
 .meta { font-size: 0.875rem; color: var(--text-muted-color); }
 .warning {
@@ -169,24 +166,6 @@ button.danger {
 .banner p { margin: 0 0 12px; color: var(--text-strong-color); }
 .error-details { margin-top: 12px; color: var(--text-muted-color); font-size: 0.85rem; }
 .error-details code { margin-top: 8px; }
-.grant {
-  border: 1px solid var(--line-color);
-  padding: 18px;
-  border-radius: 12px;
-  margin: 14px 0;
-  background: color-mix(in srgb, var(--surface-subtle-color) 70%, var(--surface-color));
-}
-.grant h3 { margin: 0 0 6px; color: var(--text-strong-color); }
-.grant-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline; }
-.status {
-  font-size: 0.8rem;
-  padding: 2px 8px;
-  border-radius: 999px;
-  border: 1px solid var(--line-color);
-  color: var(--text-muted-color);
-}
-.status.active { color: rgb(var(--state-success-rgb)); border-color: color-mix(in srgb, rgb(var(--state-success-rgb)) 40%, transparent); }
-.status.revoked { color: var(--text-faint-color); }
 .select-all-bar {
   margin: 14px 0 8px;
   padding: 10px 12px;
@@ -257,5 +236,4 @@ button.danger {
   .site-header-inner { flex-wrap: wrap; }
   .site-nav { order: 3; width: 100%; margin-left: 0; }
   .panel { padding: 18px; }
-  .grant-head { flex-direction: column; align-items: flex-start; }
 }
