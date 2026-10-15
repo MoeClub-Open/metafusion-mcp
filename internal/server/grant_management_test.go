@@ -78,7 +78,7 @@ func TestReferencePathsAllowOnlySkillDocuments(t *testing.T) {
 			t.Errorf("published documentation path rejected: %s", p)
 		}
 	}
-	for _, p := range []string{"skills/metafusion-curator/scripts/metafusion-api.mjs", "skills/metafusion-curator/references/../credentials.json", "skills/metafusion-curator/references/%2e%2e/private.md", "docs/../../private.md", "skills/metafusion-curator/reference-cloud.md"} {
+	for _, p := range []string{"skills/metafusion-curator/scripts/metafusion-api.ts", "skills/metafusion-curator/references/../credentials.json", "skills/metafusion-curator/references/%2e%2e/private.md", "docs/../../private.md", "skills/metafusion-curator/reference-cloud.md"} {
 		if referencePath.MatchString(p) {
 			t.Errorf("noncanonical or unsafe document path accepted: %s", p)
 		}
