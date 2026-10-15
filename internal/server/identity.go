@@ -20,19 +20,19 @@ func identityCheckSchema() map[string]any {
 		"catalog_number": arr(val, "maxItems", 20, "description", "Catalog numbers; ranks only, never filters"),
 	})
 	query := obj(map[string]any{
-		"key":          map[string]any{"type": "string", "minLength": 1, "maxLength": 64, "description": "Client correlation key; unique within the batch"},
-		"kind":         map[string]any{"type": "string", "enum": entityKinds},
-		"titles":       arr(val, "maxItems", 20),
-		"external_ids": arr(obj(map[string]any{"provider": map[string]any{"type": "string", "minLength": 1}, "value": val}, "provider", "value"), "maxItems", 20),
-		"attributes":   arr(obj(map[string]any{"key": map[string]any{"type": "string", "minLength": 1}, "value": val}, "key", "value"), "maxItems", 20),
-		"work_id":      uuid,
-		"release_id":   uuid,
-		"medium_id":    uuid,
-		"limit":        map[string]any{"type": "integer", "minimum": 1, "maximum": 1000},
-		"context":      contextSchema,
+		"key":            map[string]any{"type": "string", "minLength": 1, "maxLength": 64, "description": "Client correlation key; unique within the batch"},
+		"kind":           map[string]any{"type": "string", "enum": entityKinds},
+		"titles":         arr(val, "maxItems", 20),
+		"external_links": arr(obj(map[string]any{"kind": map[string]any{"type": "string", "minLength": 1}, "value": val}, "kind", "value"), "maxItems", 20),
+		"attributes":     arr(obj(map[string]any{"key": map[string]any{"type": "string", "minLength": 1}, "value": val}, "key", "value"), "maxItems", 20),
+		"work_id":        uuid,
+		"release_id":     uuid,
+		"medium_id":      uuid,
+		"limit":          map[string]any{"type": "integer", "minimum": 1, "maximum": 1000},
+		"context":        contextSchema,
 	}, "key", "kind")
 	return map[string]any{"type": "object", "required": []string{"queries"}, "additionalProperties": false, "properties": map[string]any{
-		"queries": arr(query, "minItems", 1, "maxItems", 50, "description", "1-50 identity queries; each needs kind plus at least one of titles/external_ids/attributes"),
+		"queries": arr(query, "minItems", 1, "maxItems", 50, "description", "1-50 identity queries; each needs kind plus at least one of titles/external_links/attributes"),
 	}}
 }
 
