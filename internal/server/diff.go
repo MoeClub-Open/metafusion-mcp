@@ -66,6 +66,10 @@ func (s *Server) commitDiff(ctx context.Context, body any) *mcp.CallToolResult {
 			} else {
 				item["type"], item["source_id"], item["target_id"] = doc["type"], doc["source_id"], doc["target_id"]
 			}
+		case "delete", "content":
+			item["id"], item["base_version"] = op["id"], op["base_version"]
+			item["content_change"] = op["content_change"]
+			item["note"] = "Proposed operation; preview validates it. Pending submissions do not change current facts."
 		case "update":
 			id, _ := op["id"].(string)
 			item["id"], item["base_version"] = id, op["base_version"]
