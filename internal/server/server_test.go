@@ -82,7 +82,7 @@ func TestAPIPathIsolation(t *testing.T) {
 			t.Errorf("unsafe path accepted: %s", p)
 		}
 	}
-	for _, p := range []string{"/api/catalog/entities", "/api/admin/catalog-definitions", "/api/storage/assets", "/api/community/posts/123", "/api/catalog/entities/abc/relations"} {
+	for _, p := range []string{"/api/catalog/entities", "/api/admin/catalog-definitions", "/api/storage/assets", "/api/community/posts/123", "/api/catalog/entities/abc/links"} {
 		if _, e := safeAPIPath(p); e != nil {
 			t.Errorf("public API rejected: %s: %v", p, e)
 		}

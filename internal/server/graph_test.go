@@ -25,7 +25,13 @@ const (
 // page needs a second request.
 func fakeGraph(t *testing.T, queries *atomic.Int32) *httptest.Server {
 	link := func(key, class, src, dst string) map[string]any {
-		return map[string]any{"key": key, "rule_code": "structure:x", "class": class, "source_id": src, "target_id": dst}
+		edge := map[string]any{"key": key, "rule_code": "structure:x", "class": class, "source_id": src, "target_id": dst}
+		if class == "semantic" {
+			edge["rule_code"] = "relation:edition_of"
+			edge["version"] = 7
+			edge["attributes"] = map[string]any{"credit_role": "publisher"}
+		}
+		return edge
 	}
 	adj := map[string][]map[string]any{
 		gWork:    {link("w-r", "ownership", gWork, gRelease)},
@@ -68,12 +74,6 @@ func fakeGraph(t *testing.T, queries *atomic.Int32) *httptest.Server {
 				pages = append(pages, map[string]any{"subject_id": id, "items": page, "limit": body.Limit, "offset": body.Offset, "has_more": end < len(items)})
 			}
 			writeJSON(w, 200, map[string]any{"definition_etag": "e1", "pages": pages, "entities": map[string]any{gWork: map[string]any{"kind": "work"}}, "unavailable_ids": un})
-		case strings.HasSuffix(r.URL.Path, "/relations"):
-			items := []any{}
-			if strings.Contains(r.URL.Path, gRelease) {
-				items = append(items, map[string]any{"id": "rel-1", "type": "edition_of", "source_id": gRelease, "target_id": gOther})
-			}
-			writeJSON(w, 200, map[string]any{"items": items, "entities": map[string]any{}})
 		default:
 			writeJSON(w, 404, map[string]any{"error": "not_found"})
 		}
@@ -102,8 +102,8 @@ func TestGraphReadPaginatesMergesAndTraverses(t *testing.T) {
 			sem = e.(map[string]any)
 		}
 	}
-	if sem == nil || sem["category"] != "semantic" || sem["relation"] == nil || len(sem["origins"].([]any)) != 2 {
-		t.Fatal("semantic edge not merged", sem)
+	if sem == nil || sem["category"] != "semantic" || sem["version"] != float64(7) || sem["attributes"].(map[string]any)["credit_role"] != "publisher" {
+		t.Fatal("semantic edge context lost", sem)
 	}
 	counts := m["edge_counts"].(map[string]any)
 	if counts["structural"] != float64(3) || counts["reference"] != float64(150) {
@@ -125,7 +125,7 @@ func TestGraphReadBatchesAndReportsTruncation(t *testing.T) {
 	for i := 0; i < 25; i++ {
 		ids = append(ids, strings.Replace("00000000-0000-4000-8000-0000000001xx", "xx", string(rune('a'+i/10))+string(rune('0'+i%10)), 1))
 	}
-	m := structured(t, s.graphRead(ctx, graphInput{IDs: ids, SkipRelations: true}))
+	m := structured(t, s.graphRead(ctx, graphInput{IDs: ids}))
 	if queries.Load() != 2 {
 		t.Fatal("expected two batches of <=20", queries.Load())
 	}

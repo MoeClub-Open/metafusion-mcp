@@ -22,24 +22,22 @@ const (
 )
 
 type graphInput struct {
-	IDs           []string `json:"ids"`
-	Depth         int      `json:"depth"`
-	Direction     string   `json:"direction"`
-	RuleCodes     []string `json:"rule_codes"`
-	PeerKinds     []string `json:"peer_kinds"`
-	MaxEntities   int      `json:"max_entities"`
-	SkipRelations bool     `json:"skip_semantic_relations"`
+	IDs         []string `json:"ids"`
+	Depth       int      `json:"depth"`
+	Direction   string   `json:"direction"`
+	RuleCodes   []string `json:"rule_codes"`
+	PeerKinds   []string `json:"peer_kinds"`
+	MaxEntities int      `json:"max_entities"`
 }
 
 func graphSchema() map[string]any {
 	return obj(map[string]any{
-		"ids":                     arr(map[string]any{"type": "string", "format": "uuid"}, "minItems", 1, "maxItems", graphMaxEntities),
-		"depth":                   map[string]any{"type": "integer", "minimum": 1, "maximum": graphMaxDepth, "description": "Hops to expand (default 1). 3 covers Work -> Release -> Medium -> Track."},
-		"direction":               map[string]any{"type": "string", "enum": []string{"both", "outgoing", "incoming"}},
-		"rule_codes":              arr(str()),
-		"peer_kinds":              arr(map[string]any{"type": "string", "enum": entityKinds}),
-		"max_entities":            map[string]any{"type": "integer", "minimum": 1, "maximum": graphMaxEntities},
-		"skip_semantic_relations": map[string]any{"type": "boolean", "description": "Skip the per-entity /entities/{id}/relations read (links already include semantic edges, without full relation documents)"},
+		"ids":          arr(map[string]any{"type": "string", "format": "uuid"}, "minItems", 1, "maxItems", graphMaxEntities),
+		"depth":        map[string]any{"type": "integer", "minimum": 1, "maximum": graphMaxDepth, "description": "Hops to expand (default 1). 3 covers Work -> Release -> Medium -> Track."},
+		"direction":    map[string]any{"type": "string", "enum": []string{"both", "outgoing", "incoming"}},
+		"rule_codes":   arr(str()),
+		"peer_kinds":   arr(map[string]any{"type": "string", "enum": entityKinds}),
+		"max_entities": map[string]any{"type": "integer", "minimum": 1, "maximum": graphMaxEntities},
 	}, "ids")
 }
 
@@ -109,30 +107,22 @@ func (s *Server) graphRead(ctx context.Context, in graphInput) *mcp.CallToolResu
 		}
 		reasons = append(reasons, r)
 	}
-	addEdge := func(link map[string]any, origin string) string {
+	addEdge := func(link map[string]any) {
 		key, _ := link["key"].(string)
 		if key == "" {
 			key = fmt.Sprintf("%v|%v|%v|%v", link["rule_code"], link["source_id"], link["target_id"], link["field"])
 		}
+		if _, ok := edges[key]; ok {
+			return
+		}
 		class, _ := link["class"].(string)
-		e, ok := edges[key]
-		if !ok {
-			e = map[string]any{"key": key, "category": edgeCategory(class), "class": class, "rule_code": link["rule_code"], "source_id": link["source_id"], "target_id": link["target_id"], "origins": []string{}}
-			for _, f := range []string{"position", "role", "field", "locator", "attributes", "references", "via"} {
-				if v, ok := link[f]; ok {
-					e[f] = v
-				}
-			}
-			edges[key] = e
-		}
-		origins := e["origins"].([]string)
-		for _, o := range origins {
-			if o == origin {
-				return key
+		edge := map[string]any{"key": key, "category": edgeCategory(class), "class": class, "rule_code": link["rule_code"], "source_id": link["source_id"], "target_id": link["target_id"]}
+		for _, field := range []string{"version", "position", "role", "field", "locator", "attributes", "references", "via"} {
+			if value, ok := link[field]; ok {
+				edge[field] = value
 			}
 		}
-		e["origins"] = append(origins, origin)
-		return key
+		edges[key] = edge
 	}
 	for depth := 1; depth <= in.Depth && len(frontier) > 0; depth++ {
 		next := []string{}
@@ -188,7 +178,7 @@ func (s *Server) graphRead(ctx context.Context, in graphInput) *mcp.CallToolResu
 				for _, p := range asMaps(data["pages"]) {
 					subject, _ := p["subject_id"].(string)
 					for _, link := range asMaps(p["items"]) {
-						addEdge(link, "links")
+						addEdge(link)
 						src, _ := link["source_id"].(string)
 						dst, _ := link["target_id"].(string)
 						if src == subject {
@@ -202,38 +192,6 @@ func (s *Server) graphRead(ctx context.Context, in graphInput) *mcp.CallToolResu
 					}
 				}
 				pending = more
-			}
-		}
-		if !in.SkipRelations {
-			for _, id := range frontier {
-				if unavailable[id] {
-					continue
-				}
-				data, bad := okData(s.callAPI(ctx, APIInput{Method: "GET", Path: "/api/catalog/entities/" + id + "/relations"}))
-				if bad != nil {
-					reason("upstream_error")
-					errorsSeen = append(errorsSeen, map[string]any{"step": "entity_relations", "id": id, "error": bad})
-					continue
-				}
-				for _, rel := range asMaps(data["items"]) {
-					rid, _ := rel["id"].(string)
-					key := addEdge(map[string]any{"key": rid, "class": "semantic", "rule_code": fmt.Sprintf("relation:%v", rel["type"]), "source_id": rel["source_id"], "target_id": rel["target_id"]}, "relations")
-					edges[key]["relation"] = rel
-					src, _ := rel["source_id"].(string)
-					dst, _ := rel["target_id"].(string)
-					if src == id {
-						discover(dst)
-					} else {
-						discover(src)
-					}
-				}
-				if ents, ok := data["entities"].(map[string]any); ok {
-					for k, v := range ents {
-						if _, have := entities[k]; !have {
-							entities[k] = v
-						}
-					}
-				}
 			}
 		}
 		frontier = next
@@ -275,7 +233,7 @@ func asStrings(v any) []string {
 
 func (s *Server) addGraphTool() {
 	schema := withDefs(graphSchema())
-	s.MCP.AddTool(&mcp.Tool{Name: "catalog_graph_read", Description: "Read the relationship graph around 1+ entity UUIDs in one call: structural (ownership/placement), attribute-reference and semantic edges from /relationships/query (batched by 20, every page followed until has_more=false) merged with semantic relations from /entities/{id}/relations, deduplicated by edge key. Each edge has category semantic|structural|reference and origins. depth 1-3 (default 1) = edges within that many hops; visited maps every reached entity to its hop distance, e.g. depth 3 for Work -> Release -> Medium -> Track. complete=false with incomplete_reasons (page_cap_reached, max_entities_reached, unavailable_ids, upstream_error) means absence of an edge is NOT proof it does not exist.", InputSchema: schema, Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, r *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.MCP.AddTool(&mcp.Tool{Name: "catalog_graph_read", Description: "Read the relationship graph around 1+ entity UUIDs in one call: structural (ownership/placement), attribute-reference and semantic edges from /relationships/query (batched by 20, every page followed until has_more=false), deduplicated by edge key. Each edge has category semantic|structural|reference; semantic edges include their current version and attributes. depth 1-3 (default 1) = edges within that many hops; visited maps every reached entity to its hop distance, e.g. depth 3 for Work -> Release -> Medium -> Track. complete=false with incomplete_reasons (page_cap_reached, max_entities_reached, unavailable_ids, upstream_error) means absence of an edge is NOT proof it does not exist.", InputSchema: schema, Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, r *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if _, bad := validateArgs(schema, r.Params.Arguments); bad != nil {
 			return bad, nil
 		}
