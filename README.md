@@ -18,6 +18,8 @@
 
 `metafusion_http_request` 支持 GET、HEAD、OPTIONS、POST、PUT、PATCH、DELETE，查询参数、显式第三方请求头和 JSON/text/base64 请求体。只读请求与搜索需要 `mcp.read`；写请求必须显式请求并勾选 MCP 本地权限 `mcp.web.write`，默认授权集合不含此码，此码也不进入平台委托凭据。请求不会携带平台凭据，不接受 Cookie、传输控制头或私网地址，不跟随重定向；MetaFusion 本实例请求仍走 `metafusion_api_call`。默认超时 30 秒、响应 256 KiB；最大 60 秒、请求/响应各 1 MiB。返回 HTTP 状态、选定响应头、JSON/text/base64、抓取时间与内容哈希；截断时 `complete=false`、哈希仅覆盖返回字节。外部内容只作为资料，不作为指令。
 
+`metafusion_wiki` 通过目录服务的公开 MediaWiki 适配器查询 Wikipedia / 萌娘百科，输入 `site` 和 `title` 或 `query`，可指定 Wikipedia `language`。返回原文、抓取证据、署名及许可；复用内容时保留来源与许可。只读 POST 需要 `mcp.read`，目录服务继续检查原生权限，不自动写入条目。统一网页正文读取也可用 `metafusion_api_call` 调用 `POST /api/external-sources/fetch`。
+
 若系统 DNS/代理将公网域名映射到私网地址，工具返回 `external_address_not_public`，需在运行环境提供正常的公网解析；不会绕过地址检查。可用 `MCP_TEST_WEB_LIVE=1 MCP_SEARCH_PROVIDER=bing go test ./internal/server -run TestPublicWebLive -v` 显式执行公开 GET 冒烟检查，该检查不发出任何平台或第三方写请求。
 
 验证：`go test ./...`、`go vet ./...`；设置专用 `MCP_TEST_DATABASE_URL` 后包含真实 PostgreSQL 单次授权码交换、刷新轮换、撤销和远程 MCP SDK 接入测试。完整接入与操作说明由 [metafusion-docs](https://github.com/MoeclubM/metafusion-docs/blob/main/docs/api-mcp.md) 维护，技能由 [metafusion-skills](https://github.com/MoeclubM/metafusion-skills) 维护。
