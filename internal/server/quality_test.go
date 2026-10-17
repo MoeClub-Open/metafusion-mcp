@@ -18,7 +18,7 @@ func TestQualityAuditTool(t *testing.T) {
 		case "/api/catalog/quality/batch":
 			writeJSON(w, 200, map[string]any{"reports": []any{}, "errors": map[string]any{gOther: "not_found"}})
 		case "/api/catalog/commits/preview":
-			writeJSON(w, 200, map[string]any{"applied": false, "quality_warnings": []any{map[string]any{"code": "medium_missing_tracks"}}})
+			writeJSON(w, 200, map[string]any{"applied": false, "preview": []any{map[string]any{"target": "entity", "after": map[string]any{"title": "Work"}}}})
 		default:
 			writeJSON(w, 404, map[string]any{"error": "not_found"})
 		}
@@ -47,9 +47,17 @@ func TestQualityAuditTool(t *testing.T) {
 		t.Fatal(paths)
 	}
 
-	r, _ = cs.CallTool(ctx, &mcp.CallToolParams{Name: "metafusion_commit_preview", Arguments: map[string]any{"body": map[string]any{"id": "x"}}})
+	r, e = cs.CallTool(ctx, &mcp.CallToolParams{Name: "metafusion_commit_preview", Arguments: map[string]any{"body": map[string]any{"id": "x"}}})
+	if e != nil {
+		t.Fatal(e)
+	}
 	m := structured(t, r)
-	if w, _ := m["quality_warnings"].([]any); m["ok"] != true || len(w) != 1 {
-		t.Fatal("preview must surface quality_warnings", m)
+	data, _ := m["data"].(map[string]any)
+	changes, _ := data["preview"].([]any)
+	if m["ok"] != true || data["applied"] != false || len(changes) != 1 {
+		t.Fatal("preview must forward changes", m)
+	}
+	if len(paths) != 3 || paths[2] != "POST /api/catalog/commits/preview" {
+		t.Fatal("preview must not request a separate audit", paths)
 	}
 }

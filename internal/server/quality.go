@@ -36,22 +36,3 @@ func (s *Server) addQualityTool() {
 		return s.qualityAudit(ctx, in.IDs), nil
 	})
 }
-
-// withQualityWarnings lifts the preview receipt's advisory quality_warnings to
-// the top level of a successful result (always an array) so agents see them
-// without digging into data. Failed results are returned untouched.
-func withQualityWarnings(r *mcp.CallToolResult) *mcp.CallToolResult {
-	m, ok := r.StructuredContent.(map[string]any)
-	if !ok || m["ok"] != true {
-		return r
-	}
-	warnings := []any{}
-	if data, ok := m["data"].(map[string]any); ok {
-		if w, ok := data["quality_warnings"].([]any); ok {
-			warnings = w
-		}
-	}
-	m["quality_warnings"] = warnings
-	m["quality_warnings_note"] = "advisory only; never blocks push"
-	return result(m, r.IsError)
-}
