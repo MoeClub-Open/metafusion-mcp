@@ -145,6 +145,8 @@ func (b bearerTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 }
 func TestPostgresOAuthToRemoteMCP(t *testing.T) {
 	store := testStore(t)
+	const workspaceID = "11111111-2222-4333-8444-555555555555"
+	const entityID = "22222222-3333-4444-8555-666666666666"
 	var writes atomic.Int32
 	var canEdit atomic.Bool
 	canEdit.Store(true)
@@ -179,13 +181,23 @@ func TestPostgresOAuthToRemoteMCP(t *testing.T) {
 		case "/api/auth/tokens/introspect":
 			writeJSON(w, 200, map[string]any{"valid": true, "user_id": "oauth-test-user", "permissions": []string{"catalog.entity.edit"}})
 		case "/api/catalog/entities":
-			if r.Header.Get("Authorization") != "Bearer mfp_test_secret" {
-				t.Error("MCP token passed upstream")
-			}
-			if r.Method == "POST" {
-				writes.Add(1)
+			if r.Header.Get("Authorization") != "Bearer mfp_test_secret" || r.Method != "GET" {
+				t.Error("catalog search changed delegated identity or method")
 			}
 			writeJSON(w, 200, map[string]any{"items": []any{}, "pagination": map[string]any{"next_cursor": "opaque"}})
+		case "/api/catalog/workspaces/" + workspaceID + "/changes":
+			if r.Header.Get("Authorization") != "Bearer mfp_test_secret" || r.Method != "PUT" {
+				t.Error("workspace stage changed delegated identity or method")
+			}
+			var in struct {
+				ExpectedVersion int64             `json:"expected_version"`
+				Operations      []json.RawMessage `json:"operations"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.ExpectedVersion != 2 || len(in.Operations) != 1 {
+				t.Error("workspace version or staged operations changed", err)
+			}
+			writes.Add(1)
+			writeJSON(w, 200, map[string]any{"workspace": map[string]any{"id": workspaceID, "version": 3, "dirty_count": 1}, "refs": map[string]any{"work": entityID}})
 		default:
 			writeError(w, 404, "not_found")
 		}
@@ -270,16 +282,41 @@ func TestPostgresOAuthToRemoteMCP(t *testing.T) {
 	}
 	defer session.Close()
 	listed, e := session.ListTools(ctx, nil)
-	if e != nil || len(listed.Tools) != 19 {
+	if e != nil {
 		t.Fatal("remote MCP tool discovery failed", e)
 	}
+	names := map[string]bool{}
+	for _, tool := range listed.Tools {
+		if names[tool.Name] {
+			t.Fatal("remote duplicate tool", tool.Name)
+		}
+		names[tool.Name] = true
+	}
+	for _, name := range []string{"metafusion_workspace_create", "metafusion_workspace_list", "metafusion_workspace_get", "metafusion_workspace_edit", "metafusion_workspace_checkout", "metafusion_workspace_stage", "metafusion_workspace_members", "metafusion_workspace_commit", "metafusion_workspace_commits", "metafusion_workspace_push", "metafusion_workspace_rebase", "metafusion_pull_request_create", "metafusion_pull_request_list", "metafusion_pull_request_get", "metafusion_pull_request_edit", "metafusion_pull_request_merge", "metafusion_commit_get", "metafusion_search"} {
+		if !names[name] {
+			t.Error("remote collaboration tool missing", name)
+		}
+	}
+	for _, name := range []string{"metafusion_commit_prepare", "metafusion_commit", "metafusion_commit_push", "metafusion_commit_preview", "metafusion_checkout"} {
+		if names[name] {
+			t.Error("remote obsolete tool exposed", name)
+		}
+	}
+	t.Logf("discovered %d remote tools", len(listed.Tools))
 	res, e := session.CallTool(ctx, &mcp.CallToolParams{Name: "metafusion_search", Arguments: map[string]any{"query": map[string]string{"q": "sample"}}})
 	if e != nil || res.IsError {
 		t.Fatal("remote search failed", e, res)
 	}
-	res, e = session.CallTool(ctx, &mcp.CallToolParams{Name: "metafusion_api_call", Arguments: map[string]any{"method": "POST", "path": "/api/catalog/entities", "body": map[string]string{"title": "sample"}}})
-	if e != nil || res.IsError || writes.Load() != 1 {
-		t.Fatal("remote write failed/replayed", e)
+	stageArgs := map[string]any{"workspace_id": workspaceID, "expected_version": 2, "operations": []any{map[string]any{"target": "entity", "action": "create", "ref": "work", "document": map[string]any{"kind": "work", "title": "sample"}}}}
+	res, e = session.CallTool(ctx, &mcp.CallToolParams{Name: "metafusion_workspace_stage", Arguments: stageArgs})
+	if e != nil || failedResult(res) || writes.Load() != 1 {
+		t.Fatal("remote workspace stage failed/replayed", e, res)
+	}
+	stageData, _ := structured(t, res)["data"].(map[string]any)
+	refs, _ := stageData["refs"].(map[string]any)
+	workspaceData, _ := stageData["workspace"].(map[string]any)
+	if refs["work"] != entityID || workspaceData["version"] != float64(3) || workspaceData["dirty_count"] != float64(1) {
+		t.Fatal("remote stage receipt or stable ID changed", stageData)
 	}
 	grants, e := store.Grants(ctx, "oauth-test-user")
 	if e != nil || len(grants) != 1 {
@@ -324,8 +361,8 @@ func TestPostgresOAuthToRemoteMCP(t *testing.T) {
 	if e != nil || res.IsError {
 		t.Fatal("read-only search failed", e)
 	}
-	res, e = readSession.CallTool(ctx, &mcp.CallToolParams{Name: "metafusion_api_call", Arguments: map[string]any{"method": "POST", "path": "/api/catalog/entities", "body": map[string]string{"title": "must not write"}}})
-	if e != nil || !failedResult(res) || writes.Load() != 1 {
-		t.Fatal("read-only grant authorized an upstream write", e)
+	res, e = readSession.CallTool(ctx, &mcp.CallToolParams{Name: "metafusion_workspace_stage", Arguments: stageArgs})
+	if e != nil || res.IsError || !failedResult(res) || structured(t, res)["error"] != "insufficient_scope" || writes.Load() != 1 {
+		t.Fatal("read-only grant authorized workspace staging", e, res)
 	}
 }

@@ -12,7 +12,21 @@
 
 显式运行 `mcp -migrate` 建立自有 schema，再启动 `mcp`；HTTP 启动只读检查。默认数据库连接池 32/16，HTTP 上游空闲连接总计 1024、单上游 256。读写各 180 RPM，按已验证用户计数；admin 组不计业务 RPM。当前固定窗口计数为进程内；多实例全局额度需另接共享计数。
 
-工具包含通用 API、契约、技能读取、站内和全网搜索、通用外部 HTTP 请求、候选、checkout、云端提交封存/预览/推送/恢复，以及按明确 URL 或 base64 输入处理文件。提交证据：**每条 source 必须有唯一 key，每个操作必须有 source_refs**；旧格式无兼容，缺省返回 `source_refs_required` / `invalid_source_refs`。提交封存 30 天，URL 文件限 1 GiB，base64 受 8 MiB MCP 请求体限制。平台和外部网络的未知写入结果不自动重放。
+工具包含通用 API、契约、技能读取、站内和全网搜索、外部 HTTP 请求、可选身份候选查询、工作副本、提交与 PR，以及按明确 URL 或 base64 输入处理文件。URL 文件限 1 GiB，base64 受 8 MiB MCP 请求体限制。平台和外部网络的未知写入结果不自动重放。
+
+编目编辑使用目录服务持久化副本。`metafusion_workspace_create/list/get/edit/checkout/stage/members/commit/commits/push/rebase` 分别创建、读取、管理副本、暂存、提交、推送和处理冲突；`metafusion_pull_request_create/list/get/edit/merge` 管理合并请求；`metafusion_commit_get` 读取不可变提交和合入状态。参数平铺原生 DTO，路径使用 `workspace_id`、`pull_request_id` 或 `commit_id`；列表可传 `limit`（1–100，默认 20）和 `offset`，PR 列表另可传 `status` 和 `workspace_id`。
+
+先创建或选定副本，再 checkout 目标条目。暂存可跨多次调用、多个条目和关系，commit 一并封存当前改动；副本可累积多次 commit 后 push。正式数据只在合并成功后变化。免审用户直接合入；普通用户的 push 返回 202、`applied=false` 和 PR。协作者与作者由原生 API 记录，合并者不会覆盖原作者。
+
+修改现有副本或 PR 时传 `expected_version`，push/rebase/PR 合并还需 `expected_head`；冲突返回 `base/current/proposed`，通过 rebase 显式解决。commit/rebase 的 `id` 由 Agent 生成 UUID 并保留，遇到未知结果先读该 commit、副本或 PR，不能换 ID 重交。来源和查证不是编辑、提交或合并前置条件；既有出处可随资料保留。工作副本和提交直接由目录服务管理，MCP 不再另存待提交内容。
+
+MCP schema 2 需显式执行 `mcp -migrate`。旧 MCP 封存请求迁为只读 `mcp.archived_commit_proposals`，保留全部原始内容、所有者及原时间，包括已过期记录；不会自动应用到目录。需要取回旧内容时，运维在已配置服务环境执行以下命令，按所有者导出新 JSONL 文件（文件不可已存在，内容不会打印到日志）：
+
+```sh
+mcp -export-archived-proposals ./archived-proposals.jsonl -archive-owner USER_ID
+```
+
+该导出只读取历史归档；新修改按当前副本 API 提交。旧 prepare/preview/push 工具没有兼容入口。
 
 `metafusion_web_search` 默认使用 DuckDuckGo HTML 搜索，无需密钥。也可设置 `MCP_SEARCH_PROVIDER=bing` 使用公开 RSS 搜索（无需密钥，返回条数由上游限制）。运维可设置 `MCP_SEARCH_PROVIDER=brave` 与 `MCP_SEARCH_API_KEY`，或设置 `MCP_SEARCH_PROVIDER=searxng` 与 `MCP_SEARCH_URL=https://search.example/search`（需启用 JSON 响应）；`MCP_SEARCH_URL` 也可覆盖其他提供方的请求端点。提供方须使用公开 HTTP(S) 默认端口，解析出的所有 IP 在实际连接时检查；不支持私网搜索实例。搜索返回标题、URL、摘要及抓取时间/内容哈希；验证码、无效响应和上游错误显式返回失败，不自动换源。
 

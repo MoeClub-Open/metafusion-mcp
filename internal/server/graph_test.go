@@ -155,11 +155,12 @@ func TestContractModes(t *testing.T) {
 	doc := map[string]any{
 		"info": map[string]any{"title": "c"},
 		"paths": map[string]any{
-			"/catalog/commits": map[string]any{"post": map[string]any{"summary": strings.Repeat("long ", 100), "requestBody": map[string]any{"content": map[string]any{"application/json": map[string]any{"schema": map[string]any{"$ref": "#/components/schemas/CatalogCommit"}}}}, "responses": map[string]any{"200": map[string]any{"content": map[string]any{"application/json": map[string]any{"schema": map[string]any{"$ref": "#/components/schemas/CommitReceipt"}}}}}}},
+			"/catalog/workspaces/{id}/changes": map[string]any{"put": map[string]any{"summary": strings.Repeat("long ", 100), "requestBody": map[string]any{"content": map[string]any{"application/json": map[string]any{"schema": map[string]any{"$ref": "#/components/schemas/WorkspaceChanges"}}}}, "responses": map[string]any{"200": map[string]any{"content": map[string]any{"application/json": map[string]any{"schema": map[string]any{"$ref": "#/components/schemas/WorkspaceDTO"}}}}}}},
+			"/catalog/workspaces/{id}/commits": map[string]any{"post": map[string]any{"summary": "Commit the workspace", "responses": map[string]any{"201": map[string]any{"content": map[string]any{"application/json": map[string]any{"schema": map[string]any{"$ref": "#/components/schemas/CommitDTO"}}}}}}},
 		},
 		"components": map[string]any{"schemas": map[string]any{
-			"CatalogCommit":   map[string]any{"properties": map[string]any{"operations": map[string]any{"items": map[string]any{"$ref": "#/components/schemas/CommitOperation"}}}},
-			"CommitOperation": map[string]any{}, "CommitReceipt": map[string]any{}, "Unrelated": map[string]any{"big": strings.Repeat("x", 5000)},
+			"WorkspaceChanges":   map[string]any{"properties": map[string]any{"operations": map[string]any{"items": map[string]any{"$ref": "#/components/schemas/WorkspaceOperation"}}}},
+			"WorkspaceOperation": map[string]any{}, "WorkspaceDTO": map[string]any{}, "CommitDTO": map[string]any{}, "Unrelated": map[string]any{"big": strings.Repeat("x", 5000)},
 		}},
 	}
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, doc) }))
@@ -169,12 +170,15 @@ func TestContractModes(t *testing.T) {
 	m := structured(t, s.contract(ctx, nil))
 	ops := m["operations"].([]any)
 	op := ops[0].(map[string]any)
-	if m["mode"] != "summary" || op["request"] != "CatalogCommit" || op["response"] != "CommitReceipt" || len([]rune(op["summary"].(string))) > 161 || strings.Contains(mustJSON(m), strings.Repeat("x", 100)) {
+	if m["mode"] != "summary" || op["request"] != "WorkspaceChanges" || op["response"] != "WorkspaceDTO" || len([]rune(op["summary"].(string))) > 161 || strings.Contains(mustJSON(m), strings.Repeat("x", 100)) {
 		t.Fatal("bad summary", m)
 	}
-	m = structured(t, s.contract(ctx, json.RawMessage(`{"path":"/api/catalog/commits","method":"POST"}`)))
+	if len(ops) != 2 || ops[1].(map[string]any)["response"] != "CommitDTO" {
+		t.Fatal("commit DTO missing from index", ops)
+	}
+	m = structured(t, s.contract(ctx, json.RawMessage(`{"path":"/api/catalog/workspaces/{id}/changes","method":"PUT"}`)))
 	sc := m["schemas"].(map[string]any)
-	if sc["CommitOperation"] == nil || sc["CommitReceipt"] == nil || sc["Unrelated"] != nil {
+	if sc["WorkspaceOperation"] == nil || sc["WorkspaceDTO"] == nil || sc["CommitDTO"] != nil || sc["Unrelated"] != nil {
 		t.Fatal("operation schemas closure", sc)
 	}
 	if m = structured(t, s.contract(ctx, json.RawMessage(`{"mode":"full"}`))); m["catalog"] == nil {
@@ -182,39 +186,5 @@ func TestContractModes(t *testing.T) {
 	}
 	if m = structured(t, s.contract(ctx, json.RawMessage(`{"path":"/api/nope"}`))); m["status"] != float64(404) {
 		t.Fatal("missing op", m)
-	}
-}
-
-func TestCommitDiff(t *testing.T) {
-	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/catalog/entities/"+gRelease {
-			writeJSON(w, 200, map[string]any{"id": gRelease, "kind": "release", "title": "rye", "version": 4, "attributes": map[string]any{"catalog_number": "TECI-1", "a/b": 1}})
-			return
-		}
-		writeJSON(w, 404, map[string]any{"error": "not_found"})
-	}))
-	defer up.Close()
-	s := New(testConfig(up.URL), nil)
-	ctx := principalContext(Principal{PAT: "mfp_x", Grant: Grant{UserID: "u", Scopes: []string{"catalog.entity.edit"}}})
-	commit := roundTrip(map[string]any{"id": "c", "edit_note": "n", "sources": []any{map[string]any{}}, "operations": []any{
-		map[string]any{"target": "entity", "action": "create", "ref": "x", "document": map[string]any{"kind": "track", "title": "day by day", "position": 1}},
-		map[string]any{"target": "entity", "action": "update", "id": gRelease, "base_version": 3, "patch": []any{
-			map[string]any{"path": "/attributes/catalog_number", "value": "TECI-2"},
-			map[string]any{"path": "/title", "value": "rye"},
-			map[string]any{"path": "/attributes/a~1b", "remove": true},
-			map[string]any{"path": "/attributes/new", "value": 1},
-		}},
-		map[string]any{"target": "entity", "action": "update", "id": gMedium, "base_version": 1, "patch": []any{map[string]any{"path": "/title", "value": "x"}}},
-	}})
-	m := structured(t, s.commitDiff(ctx, commit))
-	ops := m["operations"].([]any)
-	upd := ops[1].(map[string]any)
-	ch := upd["changes"].([]any)
-	c0, c1, c2, c3 := ch[0].(map[string]any), ch[1].(map[string]any), ch[2].(map[string]any), ch[3].(map[string]any)
-	if upd["stale_base"] != true || upd["current_version"] != float64(4) || c0["old"] != "TECI-1" || c0["new"] != "TECI-2" || c1["no_op"] != true || c2["op"] != "remove" || c2["old"] != float64(1) || c3["old_absent"] != true {
-		t.Fatal("diff wrong", mustJSON(upd))
-	}
-	if ops[0].(map[string]any)["title"] != "day by day" || ops[2].(map[string]any)["read_error"] != "not_found" || m["updates_without_current_snapshot"] != float64(1) {
-		t.Fatal("create/unreadable", mustJSON(m))
 	}
 }

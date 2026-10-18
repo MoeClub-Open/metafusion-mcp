@@ -100,11 +100,11 @@ func TestReadOnlyAndCredentialIsolation(t *testing.T) {
 	defer up.Close()
 	s := New(testConfig(up.URL), nil)
 	readonly := principalContext(Principal{Grant: Grant{UserID: "u", Scopes: []string{"mcp.read"}}})
-	if !failedResult(s.callAPI(readonly, APIInput{Method: "POST", Path: "/api/catalog/entities", Body: map[string]any{"title": "x"}})) || hits.Load() != 0 {
+	if !failedResult(s.callAPI(readonly, APIInput{Method: "POST", Path: "/api/catalog/workspaces", Body: map[string]any{"name": "x"}})) || hits.Load() != 0 {
 		t.Fatal("read-only grant performed mutation")
 	}
 	ctx := principalContext(Principal{Grant: Grant{UserID: "u", Scopes: []string{"catalog.entity.edit"}}, PAT: "mfp_private"})
-	res := s.callAPI(ctx, APIInput{Method: "PUT", Path: "/api/catalog/entities/123", Body: map[string]any{"expected_version": 1}})
+	res := s.callAPI(ctx, APIInput{Method: "PUT", Path: "/api/catalog/workspaces/" + gWork + "/changes", Body: map[string]any{"expected_version": 1}})
 	data := res.StructuredContent.(map[string]any)
 	if data["status"] != 409 || res.IsError || data["ok"] != false || data["error"] != "version_conflict" || hits.Load() != 1 {
 		t.Fatal("conflict changed/replayed")
@@ -129,7 +129,7 @@ func TestUnknownWriteNeverReplayed(t *testing.T) {
 	f := &failingTransport{}
 	s.HTTP.Transport = f
 	ctx := principalContext(Principal{PAT: "mfp_test"})
-	r := s.callAPI(ctx, APIInput{Method: "POST", Path: "/api/catalog/commits", Body: map[string]string{"id": "sealed"}})
+	r := s.callAPI(ctx, APIInput{Method: "POST", Path: "/api/catalog/workspaces/" + gWork + "/commits", Body: map[string]any{"id": gOther, "expected_version": 2, "message": "Save edits"}})
 	if f.calls.Load() != 1 || r.StructuredContent.(map[string]any)["outcome"] != "unknown" {
 		t.Fatal("unknown write replayed or classified as unapplied")
 	}
@@ -141,7 +141,7 @@ func TestKnownBusyReceiptPreserved(t *testing.T) {
 	}))
 	defer up.Close()
 	s := New(testConfig(up.URL), nil)
-	r := s.callAPI(principalContext(Principal{PAT: "pat"}), APIInput{Method: "POST", Path: "/api/catalog/commits"})
+	r := s.callAPI(principalContext(Principal{PAT: "pat"}), APIInput{Method: "POST", Path: "/api/catalog/workspaces/" + gWork + "/commits"})
 	v := r.StructuredContent.(map[string]any)
 	d := v["data"].(map[string]any)
 	if d["error"] != "transaction_busy" || d["applied"] != false || v["headers"].(map[string]string)["Retry-After"] != "1" {
@@ -215,11 +215,28 @@ func TestMCPToolsThroughOfficialClient(t *testing.T) {
 	}
 	defer cs.Close()
 	list, e := cs.ListTools(context.Background(), nil)
-	if e != nil || len(list.Tools) != 20 {
+	if e != nil {
 		t.Fatalf("tool discovery: %v %v", list, e)
 	}
+	names := map[string]bool{}
+	for _, tool := range list.Tools {
+		if names[tool.Name] {
+			t.Fatalf("duplicate tool %s", tool.Name)
+		}
+		names[tool.Name] = true
+	}
+	for _, name := range []string{"metafusion_workspace_create", "metafusion_workspace_list", "metafusion_workspace_get", "metafusion_workspace_edit", "metafusion_workspace_checkout", "metafusion_workspace_stage", "metafusion_workspace_members", "metafusion_workspace_commit", "metafusion_workspace_commits", "metafusion_workspace_push", "metafusion_workspace_rebase", "metafusion_pull_request_create", "metafusion_pull_request_list", "metafusion_pull_request_get", "metafusion_pull_request_edit", "metafusion_pull_request_merge", "metafusion_commit_get", "metafusion_api_call", "catalog_graph_read"} {
+		if !names[name] {
+			t.Errorf("missing tool %s", name)
+		}
+	}
+	for _, name := range []string{"metafusion_commit_prepare", "metafusion_commit", "metafusion_commit_push", "metafusion_commit_preview", "metafusion_checkout", "catalog_commit_diff"} {
+		if names[name] {
+			t.Errorf("obsolete tool still exposed: %s", name)
+		}
+	}
 	r, e := cs.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "metafusion://workflow"})
-	if e != nil || !strings.Contains(r.Contents[0].Text, "commit") {
+	if e != nil || !strings.Contains(r.Contents[0].Text, "workspace") || !strings.Contains(r.Contents[0].Text, "Sources and candidate checks are optional") {
 		t.Fatal("workflow resource missing")
 	}
 }

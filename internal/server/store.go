@@ -43,19 +43,35 @@ func OpenStore(dsn string) (*Store, error) {
 	d.SetMaxIdleConns(16)
 	return &Store{d}, nil
 }
-func (s *Store) Migrate(ctx context.Context) error { _, e := s.DB.ExecContext(ctx, schema); return e }
-func (s *Store) Check(ctx context.Context) error {
-	var v int
-	e := s.DB.QueryRowContext(ctx, "SELECT version FROM mcp.schema_version").Scan(&v)
-	if e != nil {
-		return e
+func (s *Store) Migrate(ctx context.Context) error {
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
 	}
-	if v != 1 {
+	defer tx.Rollback()
+	// Serialize explicit migrations without relying on individual DDL locks.
+	if _, err = tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock(741586401)"); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, schema); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+func (s *Store) Check(ctx context.Context) error {
+	var current, retired bool
+	err := s.DB.QueryRowContext(ctx, `SELECT
+		count(*) = 1 AND min(version) = 2,
+		to_regclass('mcp.drafts') IS NULL
+		FROM mcp.schema_version`).Scan(&current, &retired)
+	if err != nil {
+		return err
+	}
+	if !current {
 		return errors.New("unsupported MCP schema")
 	}
-	_, e = s.DB.ExecContext(ctx, "SELECT id FROM mcp.drafts LIMIT 0")
-	if e != nil {
-		return e
+	if !retired {
+		return errors.New("retired MCP draft table remains; run explicit migration")
 	}
 	return nil
 }

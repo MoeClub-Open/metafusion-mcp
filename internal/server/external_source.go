@@ -35,7 +35,7 @@ func (s *Server) addExternalSourceTool() {
 	schema := withDefs(externalSourceQuerySchema())
 	s.MCP.AddTool(&mcp.Tool{
 		Name:        "external_source_query",
-		Description: "Read-only external source query via POST /api/external-sources/query. op=search|lookup|detail. Returns upstream raw data plus FetchMeta {url, fetched_at, content_hash}; lookup/detail also return the existing preview mapping. Never auto-imports, merges or writes the catalog — use normal commit workflow with Agent-chosen evidence. DLsite/DMM search returns search_not_supported. Requires a signed-in grant (mcp.read is enough for the tool call; catalog auth still applies upstream).",
+		Description: "Read-only external source query via POST /api/external-sources/query. op=search|lookup|detail. Returns upstream raw data plus FetchMeta {url, fetched_at, content_hash}; lookup/detail also return the existing preview mapping. Never auto-imports, merges or writes the catalog — use workspace staging, commits and push. DLsite/DMM search returns search_not_supported. Requires a signed-in grant (mcp.read is enough for the tool call; catalog auth still applies upstream).",
 		InputSchema: schema,
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
 	}, func(ctx context.Context, r *mcp.CallToolRequest) (*mcp.CallToolResult, error) {

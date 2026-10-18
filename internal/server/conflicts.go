@@ -2,16 +2,16 @@ package server
 
 import "github.com/modelcontextprotocol/go-sdk/mcp"
 
-// withCommitConflicts lifts field-level conflicts from a 409 commit_conflict
+// withWorkspaceConflicts lifts field-level conflicts from a 409 workspace_conflict
 // upstream body to the top level of the ok:false tool result, so agents see
-// pointer/base/current/proposed/suggestions without digging into details.
+// pointer/base/current/proposed without digging into details.
 // Successful results and other errors are returned untouched.
-func withCommitConflicts(r *mcp.CallToolResult) *mcp.CallToolResult {
+func withWorkspaceConflicts(r *mcp.CallToolResult) *mcp.CallToolResult {
 	m, ok := r.StructuredContent.(map[string]any)
 	if !ok || m["ok"] != false {
 		return r
 	}
-	if m["error"] != "commit_conflict" {
+	if m["error"] != "workspace_conflict" {
 		return r
 	}
 	conflicts := []any{}
@@ -32,6 +32,6 @@ func withCommitConflicts(r *mcp.CallToolResult) *mcp.CallToolResult {
 		}
 	}
 	m["conflicts"] = conflicts
-	m["conflicts_note"] = "field-level three-way merge diagnostics (pointer, base, current, proposed, kind, suggestions); suggestions are advisory only (manual_merge|take_current|rebase_keep_mine). Do not replay the same sealed commit id — prepare a rebased commit."
+	m["conflicts_note"] = "Three-way workspace conflict: inspect target, id, pointer, base, current, proposed and current_version. Submit explicit resolutions to workspace_rebase with expected workspace version/head and a new client-generated commit id; main remains unchanged until merge."
 	return result(m, r.IsError)
 }

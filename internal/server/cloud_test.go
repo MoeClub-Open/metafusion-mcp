@@ -4,13 +4,11 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"strings"
 	"testing"
 )
 
@@ -26,11 +24,11 @@ func TestUserReadWriteBudgetsAndAdmin(t *testing.T) {
 		t.Fatal("read budget was split by path")
 	}
 	for i := 0; i < 180; i++ {
-		if !l.AllowAPI(p, "POST", "/api/catalog/entities") {
+		if !l.AllowAPI(p, "POST", "/api/catalog/workspaces") {
 			t.Fatal("write budget shared with read")
 		}
 	}
-	if l.AllowAPI(p, "POST", "/api/catalog/relations") {
+	if l.AllowAPI(p, "POST", "/api/catalog/workspaces/"+gWork+"/push") {
 		t.Fatal("write budget exceeded")
 	}
 	p.Grant.UserID = "two"
@@ -40,7 +38,7 @@ func TestUserReadWriteBudgetsAndAdmin(t *testing.T) {
 	p.Grant.UserID = "one"
 	p.Groups = []string{"admin"}
 	for i := 0; i < 1000; i++ {
-		if !l.AllowAPI(p, "POST", "/api/catalog/entities") {
+		if !l.AllowAPI(p, "POST", "/api/catalog/workspaces") {
 			t.Fatal("admin rate limited")
 		}
 	}
@@ -120,58 +118,5 @@ func TestCloudUploadNativeAPIAndNoCredentialToObjects(t *testing.T) {
 	r = s.upload(principalContext(Principal{PAT: "mfp_upload", Grant: Grant{UserID: "owner", Scopes: []string{"storage.asset.upload"}}}), fileInput{FileName: "hello.txt", Base64: base64.StdEncoding.EncodeToString([]byte("hello"))})
 	if !r.IsError || len(calls) != 3 {
 		t.Fatal("unconfigured object origin accepted")
-	}
-}
-
-func TestCloudCommitDraftOwnershipAndImmutablePush(t *testing.T) {
-	store := testStore(t)
-	var payload string
-	calls := 0
-	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls++
-		b, _ := io.ReadAll(r.Body)
-		payload = string(b)
-		w.Header().Set("Content-Type", "application/json")
-		io.WriteString(w, `{"applied":true}`)
-	}))
-	defer up.Close()
-	s := New(testConfig(up.URL), store)
-	ctx := principalContext(Principal{PAT: "mfp_edit", Grant: Grant{UserID: "draft-owner", Scopes: []string{"catalog.entity.edit"}}})
-	a, b := mcp.NewInMemoryTransports()
-	ss, e := s.MCP.Connect(ctx, a, nil)
-	if e != nil {
-		t.Fatal(e)
-	}
-	defer ss.Close()
-	client := mcp.NewClient(&mcp.Implementation{Name: "cloud", Version: "1"}, nil)
-	cs, e := client.Connect(ctx, b, nil)
-	if e != nil {
-		t.Fatal(e)
-	}
-	defer cs.Close()
-	draft, e := cs.CallTool(ctx, &mcp.CallToolParams{Name: "metafusion_commit_prepare", Arguments: map[string]any{"definitions_etag": "etag", "edit_note": "evidence checked by Agent", "sources": []map[string]string{{"kind": "url", "url": "https://example.com", "citation": "Example", "key": "ex"}}, "operations": []map[string]any{{"target": "entity", "action": "update", "id": "11111111-2222-4333-8444-555555555555", "base_version": 2, "patch": []map[string]string{{"path": "/title", "value": "edited"}}, "source_refs": []map[string]any{{"source": "ex", "pointers": []string{"/title"}}}}}}})
-	if e != nil || draft.IsError {
-		t.Fatal("cloud prepare failed", e, draft)
-	}
-	var saved map[string]any
-	json.Unmarshal([]byte(draft.Content[0].(*mcp.TextContent).Text), &saved)
-	id := saved["id"].(string)
-	t.Cleanup(func() { store.DB.Exec("DELETE FROM mcp.drafts WHERE id=$1", id) })
-	preview, e := cs.CallTool(ctx, &mcp.CallToolParams{Name: "metafusion_commit", Arguments: map[string]string{"id": id, "action": "preview"}})
-	if e != nil || preview.IsError {
-		t.Fatal("cloud preview failed", e, preview)
-	}
-	sealed := payload
-	pushed, e := cs.CallTool(ctx, &mcp.CallToolParams{Name: "metafusion_commit", Arguments: map[string]string{"id": id, "action": "push"}})
-	if e != nil || pushed.IsError || payload != sealed || calls != 2 {
-		t.Fatal("cloud changed/replayed commit", e)
-	}
-	var n int
-	store.DB.QueryRow("SELECT count(*) FROM mcp.drafts WHERE id=$1 AND user_id='someone-else'", id).Scan(&n)
-	if n != 0 {
-		t.Fatal("draft visible to another owner")
-	}
-	if !strings.Contains(payload, id) {
-		t.Fatal("generated id lost")
 	}
 }

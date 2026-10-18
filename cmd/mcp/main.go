@@ -14,7 +14,13 @@ import (
 
 func main() {
 	migrate := flag.Bool("migrate", false, "explicitly apply MCP schema migrations")
+	exportArchive := flag.String("export-archived-proposals", "", "export one owner's retired proposals to a new JSONL file; never applies them")
+	archiveOwner := flag.String("archive-owner", "", "required owner ID for an archived proposal export")
 	flag.Parse()
+	if (*exportArchive != "" && (*migrate || *archiveOwner == "")) || (*archiveOwner != "" && *exportArchive == "") {
+		slog.Error("archive export requires -export-archived-proposals and -archive-owner, separately from -migrate")
+		os.Exit(1)
+	}
 	c, e := server.LoadConfig()
 	if e != nil {
 		slog.Error("invalid configuration", "error", e)
@@ -39,6 +45,25 @@ func main() {
 	}
 	if *migrate {
 		slog.Info("MCP schema migration complete")
+		return
+	}
+	if *exportArchive != "" {
+		// Never replace an existing file or print private proposal contents.
+		out, err := os.OpenFile(*exportArchive, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+		if err != nil {
+			slog.Error("cannot create archive export file")
+			os.Exit(1)
+		}
+		exportCtx, exportCancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		count, err := store.ExportArchivedProposals(exportCtx, *archiveOwner, out)
+		exportCancel()
+		closeErr := out.Close()
+		if err != nil || closeErr != nil {
+			_ = os.Remove(*exportArchive)
+			slog.Error("archive export failed; incomplete file removed")
+			os.Exit(1)
+		}
+		slog.Info("archived proposals exported", "count", count)
 		return
 	}
 	s := server.New(c, store)

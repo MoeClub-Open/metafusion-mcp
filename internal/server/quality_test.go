@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -17,8 +18,8 @@ func TestQualityAuditTool(t *testing.T) {
 			writeJSON(w, 200, map[string]any{"entity_id": gWork, "status": "complete", "issues": []any{}})
 		case "/api/catalog/quality/batch":
 			writeJSON(w, 200, map[string]any{"reports": []any{}, "errors": map[string]any{gOther: "not_found"}})
-		case "/api/catalog/commits/preview":
-			writeJSON(w, 200, map[string]any{"applied": false, "preview": []any{map[string]any{"target": "entity", "after": map[string]any{"title": "Work"}}}})
+		case "/api/catalog/workspaces/" + gRelease + "/changes":
+			writeJSON(w, 200, map[string]any{"workspace": map[string]any{"id": gRelease, "version": 2, "dirty_count": 1}, "refs": map[string]any{}})
 		default:
 			writeJSON(w, 404, map[string]any{"error": "not_found"})
 		}
@@ -47,17 +48,28 @@ func TestQualityAuditTool(t *testing.T) {
 		t.Fatal(paths)
 	}
 
-	r, e = cs.CallTool(ctx, &mcp.CallToolParams{Name: "metafusion_commit_preview", Arguments: map[string]any{"body": map[string]any{"id": "x"}}})
+	tools, e := cs.ListTools(ctx, nil)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, tool := range tools.Tools {
+		if tool.Name == "catalog_quality_audit" && !strings.Contains(tool.Description, "never block") {
+			t.Fatal("quality tool lacks advisory-only guidance", tool.Description)
+		}
+	}
+	editContext := principalContext(Principal{PAT: "mfp_edit", Grant: Grant{UserID: "u", Scopes: []string{"catalog.entity.edit"}}})
+	editClient := connect(t, s, editContext)
+	r, e = editClient.CallTool(editContext, &mcp.CallToolParams{Name: "metafusion_workspace_stage", Arguments: map[string]any{"workspace_id": gRelease, "expected_version": 1, "operations": []any{map[string]any{"target": "entity", "action": "update", "id": gWork, "patch": []any{map[string]any{"path": "/title", "value": "Work"}}}}}})
 	if e != nil {
 		t.Fatal(e)
 	}
 	m := structured(t, r)
 	data, _ := m["data"].(map[string]any)
-	changes, _ := data["preview"].([]any)
-	if m["ok"] != true || data["applied"] != false || len(changes) != 1 {
-		t.Fatal("preview must forward changes", m)
+	workspace, _ := data["workspace"].(map[string]any)
+	if m["ok"] != true || workspace["dirty_count"] != float64(1) {
+		t.Fatal("workspace stage must forward changes", m)
 	}
-	if len(paths) != 3 || paths[2] != "POST /api/catalog/commits/preview" {
-		t.Fatal("preview must not request a separate audit", paths)
+	if len(paths) != 3 || paths[2] != "PUT /api/catalog/workspaces/"+gRelease+"/changes" {
+		t.Fatal("workspace stage must not request a separate audit", paths)
 	}
 }
