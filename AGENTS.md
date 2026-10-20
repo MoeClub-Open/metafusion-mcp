@@ -15,3 +15,5 @@ MCP 使用专用委托凭据，与个人 API Key 分别管理和计额；缩减�
 目录编辑统一走服务器工作副本：workspace create/checkout → changes 暂存 → commit → push；普通用户由 PR 合并，免审用户可直接合入。`expected_version` 与 `expected_head` 必须使用当前副本/PR 返回值；commit 与 rebase 的 UUID 由调用方生成并保留，结果不明先读 commit/workspace/PR，不能自动重放或换 ID 重交。来源、查证记录和候选检查都是可选资料，不设独立必经流程，不生成虚假出处。
 
 工具参数平铺原生 DTO 字段，路径参数分别为 `workspace_id`、`pull_request_id`、`commit_id`。`metafusion_workspace_stage` 仅转发 `PUT /api/catalog/workspaces/:id/changes`；读取线上契约，不维护第二条提交或审核实现。旧 MCP 封存工具及 `mcp.drafts` 已移除；schema 2 将旧请求及其所有者原样归档，不自动执行。只允许通过显式 owner-scoped 导出命令读取归档，不对 MCP 暴露归档接口。
+
+版本操作沿用目录原生 fork/version/rebase/tag/stash 协议；变基可指定 onto_commit_id 与 order，保留原提交和替代关系。冲突携带 source_commit_id，解决时用 commit_id 区分重放步骤并保留先前解决项；未知结果先回读最终请求 ID。历史、快照、对比均按 total/limit/offset 翻页，不能把单页当成全部。
