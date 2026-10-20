@@ -16,6 +16,26 @@ func (s *Server) addCollaborationTools() {
 	page := func() map[string]any {
 		return map[string]any{"limit": map[string]any{"type": "integer", "minimum": 1, "maximum": 100}, "offset": map[string]any{"type": "integer", "minimum": 0}}
 	}
+	records := func() map[string]any {
+		p := page()
+		p["target"] = map[string]any{"type": "string", "enum": []string{"entity", "relation"}}
+		p["record_id"] = uuidSchema()
+		return p
+	}
+	history := func(branch bool) map[string]any {
+		p := records()
+		p["author_id"] = uuidSchema()
+		p["since"] = map[string]any{"type": "string", "format": "date-time"}
+		p["until"] = map[string]any{"type": "string", "format": "date-time"}
+		if branch {
+			p["state"] = map[string]any{"type": "string", "enum": []string{"active", "pending", "integrated", "replaced", "all"}}
+		}
+		return p
+	}
+	commit := func(p map[string]any, required ...string) map[string]any {
+		p["commit_id"] = uuidSchema()
+		return obj(p, append([]string{"commit_id"}, required...)...)
+	}
 	resolutions := func() map[string]any {
 		return arr(obj(map[string]any{"commit_id": uuidSchema(), "target": map[string]any{"type": "string", "enum": []string{"entity", "relation"}}, "id": uuidSchema(), "pointer": str(), "current_version": map[string]any{"type": "integer", "minimum": 0}, "value": map[string]any{}, "remove": map[string]any{"type": "boolean"}}, "target", "id", "pointer", "current_version"))
 	}
@@ -43,7 +63,7 @@ func (s *Server) addCollaborationTools() {
 		{"workspace_stage", "PUT", "/api/catalog/workspaces/{id}/changes", "workspace_id", "Save 1-100 operations to the workspace working copy. Multiple calls and objects can be combined into one commit. No source, source_refs or candidate-review prerequisite. Create returns stable UUIDs in refs; use those UUIDs in later calls. CAS expected_version prevents overwriting concurrent collaborator edits.", workspaceStageSchema()},
 		{"workspace_members", "PUT", "/api/catalog/workspaces/{id}/members", "workspace_id", "Set a workspace's collaborating user UUIDs with expected_version. The owner remains responsible; upstream checks who may edit membership.", workspace(map[string]any{"expected_version": version(), "user_ids": ids()}, "expected_version", "user_ids")},
 		{"workspace_commit", "POST", "/api/catalog/workspaces/{id}/commits", "workspace_id", "Commit all current workspace changes with a message and client-generated UUID id. Immutable authorship is recorded; main remains unchanged. Multiple commits may be pushed together. Keep the id and recover through metafusion_commit_get after an unknown outcome.", workspace(map[string]any{"id": uuidSchema(), "expected_version": version(), "message": message()}, "id", "expected_version", "message")},
-		{"workspace_commits", "GET", "/api/catalog/workspaces/{id}/commits", "workspace_id", "Read active branch commits newest first with total/limit/offset pagination; retained originals remain available through reflog and replacement links.", workspace(page())},
+		{"workspace_commits", "GET", "/api/catalog/workspaces/{id}/commits", "workspace_id", "Read branch commits with record, author, RFC3339 creation-time and membership-state filters before pagination. state defaults to active; pending/integrated/replaced/all select retained branch memberships.", workspace(history(true))},
 		{"workspace_fork", "POST", "/api/catalog/workspaces/fork", "", "Derive an independent private copy from an accessible frozen commit. For an official catalog checkpoint, optional entity_ids/relation_ids select the record set; omission selects that checkpoint's changed records. Keep id for retries.", obj(map[string]any{"id": uuidSchema(), "name": str(), "commit_id": uuidSchema(), "entity_ids": ids(), "relation_ids": ids()}, "id", "name", "commit_id")},
 		{"workspace_version", "POST", "/api/catalog/workspaces/{id}/version", "workspace_id", "Apply a merge, cherry-pick, revert, snapshot restore, amend, suffix squash, reset or discard in the copy only. Rewrite retains originals and requires owner permission. Sources are commit IDs, never live unsaved state. Unknown writes must not be replayed automatically.", workspace(map[string]any{"id": uuidSchema(), "expected_version": version(), "expected_head": str(), "operation": map[string]any{"type": "string", "enum": []string{"merge", "cherry_pick", "revert", "restore", "amend", "squash", "reset", "discard"}}, "commit_ids": ids(), "message": str(), "mode": map[string]any{"type": "string", "enum": []string{"soft", "hard"}}, "resolutions": resolutions()}, "id", "expected_version", "expected_head", "operation")},
 		{"workspace_status", "GET", "/api/catalog/workspaces/{id}/status", "workspace_id", "Read dirty and pending counts plus committed merge conflicts without changing any data.", workspace(map[string]any{})},
@@ -52,11 +72,28 @@ func (s *Server) addCollaborationTools() {
 		{"workspace_tag", "POST", "/api/catalog/workspaces/{id}/tags", "workspace_id", "Owner-only create, rename or move a tag; tag_id selects an existing tag, delete=true removes it. Keep request id and version/head guards.", workspace(map[string]any{"id": uuidSchema(), "expected_version": version(), "expected_head": str(), "tag_id": uuidSchema(), "delete": map[string]any{"type": "boolean"}, "name": str(), "commit_id": uuidSchema(), "message": str()}, "id", "expected_version", "expected_head")},
 		{"workspace_stashes", "GET", "/api/catalog/workspaces/{id}/stashes", "workspace_id", "List saved private working changes with pagination.", workspace(page())},
 		{"workspace_stash", "POST", "/api/catalog/workspaces/{id}/stashes", "workspace_id", "Save working changes and clear the copy, apply or pop with three-way conflict handling, or drop a stash. Keep id; this never publishes records.", workspace(map[string]any{"id": uuidSchema(), "expected_version": version(), "expected_head": str(), "operation": map[string]any{"type": "string", "enum": []string{"save", "apply", "pop", "drop"}}, "stash_id": uuidSchema(), "name": str(), "resolutions": resolutions()}, "id", "expected_version", "expected_head", "operation")},
-		{"catalog_head", "GET", "/api/catalog/head", "", "Read the official transactional catalog head.", obj(map[string]any{})},
-		{"catalog_history", "GET", "/api/catalog/history", "", "Read visible official integration checkpoints newest first with pagination.", obj(page())},
-		{"commit_snapshot", "GET", "/api/catalog/commits/{id}/snapshot", "commit_id", "Read a paginated frozen snapshot. Scope catalog is the official catalog at that checkpoint; tracked_records is a complete tracked branch set; known_records is retained historical data only.", func() map[string]any { p := page(); p["commit_id"] = uuidSchema(); return obj(p, "commit_id") }()},
-		{"commit_compare", "GET", "/api/catalog/commits/{id}/compare", "commit_id", "Compare two immutable versions with paginated changes. base is the starting commit UUID.", func() map[string]any {
+		{"workspace_diff", "GET", "/api/catalog/workspaces/{id}/diff", "workspace_id", "Read working changes relative to the committed head (default) or checkout base, without writing. Filter target/record_id before pagination. Keep returned version/head_id when reviewing concurrent edits.", func() map[string]any {
+			p := records()
+			p["basis"] = map[string]any{"type": "string", "enum": []string{"head", "base"}}
+			return workspace(p)
+		}()},
+		{"commit_diff", "GET", "/api/catalog/commits/{id}/diff", "commit_id", "Read one immutable commit's original changes, with target/record_id filtering and pagination.", commit(records())},
+		{"pull_request_diff", "GET", "/api/catalog/pull-requests/{id}/diff", "pull_request_id", "Read net changes frozen at the selected PR version/source_head_id, excluding later workspace edits. Filter target/record_id before pagination.", pr(records())},
+		{"pull_request_commits", "GET", "/api/catalog/pull-requests/{id}/commits", "pull_request_id", "Read the frozen PR commit set, newest first. Record/author/RFC3339 creation-time filters run before pagination. This never follows a live workspace head.", pr(history(false))},
+		{"record_revisions", "GET", "/api/catalog/entities/{id}/revisions", "record_id", "Read visible entity or relation revisions with exact version, original actor and RFC3339 creation-time filters before pagination. Deleted relation history requires active endpoints.", func() map[string]any {
 			p := page()
+			p["record_id"] = uuidSchema()
+			p["version"] = version()
+			p["author_id"] = uuidSchema()
+			p["since"] = map[string]any{"type": "string", "format": "date-time"}
+			p["until"] = map[string]any{"type": "string", "format": "date-time"}
+			return obj(p, "record_id")
+		}()},
+		{"catalog_head", "GET", "/api/catalog/head", "", "Read the official transactional catalog head.", obj(map[string]any{})},
+		{"catalog_history", "GET", "/api/catalog/history", "", "Read visible official integration checkpoints newest first. Filter by record, author and RFC3339 merge time before pagination.", obj(history(false))},
+		{"commit_snapshot", "GET", "/api/catalog/commits/{id}/snapshot", "commit_id", "Read a paginated frozen snapshot. Scope catalog is the official catalog at that checkpoint; tracked_records is a complete tracked branch set; known_records is retained historical data only.", commit(records())},
+		{"commit_compare", "GET", "/api/catalog/commits/{id}/compare", "commit_id", "Compare two immutable versions with paginated changes. base is the starting commit UUID.", func() map[string]any {
+			p := records()
 			p["commit_id"] = uuidSchema()
 			p["base"] = uuidSchema()
 			return obj(p, "commit_id", "base")
