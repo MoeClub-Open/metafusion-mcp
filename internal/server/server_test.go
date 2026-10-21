@@ -253,6 +253,26 @@ func TestRedirectAndPKCEValidation(t *testing.T) {
 	}
 }
 
+func TestDCRRateLimitCannotBeBypassedWithUnverifiedHeaders(t *testing.T) {
+	s := New(testConfig("https://site.test"), &Store{})
+	h := s.Handler()
+	for i := 0; i <= 180; i++ {
+		r := httptest.NewRequest(http.MethodPost, "https://site.test/mcp/oauth/register", strings.NewReader(`{}`))
+		r.RemoteAddr = "198.51.100.10:1234"
+		r.Header.Set("Authorization", fmt.Sprintf("Bearer unverified-%d", i))
+		r.Header.Set("X-Forwarded-For", fmt.Sprintf("198.51.100.%d", i))
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		want := http.StatusBadRequest
+		if i == 180 {
+			want = http.StatusTooManyRequests
+		}
+		if w.Code != want {
+			t.Fatalf("registration request %d: %d %s, want %d", i+1, w.Code, w.Body.String(), want)
+		}
+	}
+}
+
 func TestMCPLandingPage(t *testing.T) {
 	s := New(testConfig("https://site.test"), &Store{})
 	h := s.Handler()
