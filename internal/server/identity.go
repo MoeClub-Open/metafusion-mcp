@@ -13,12 +13,7 @@ import (
 func identityCheckSchema() map[string]any {
 	val := map[string]any{"type": "string", "maxLength": 256}
 	uuid := map[string]any{"type": "string", "format": "uuid"}
-	contextSchema := obj(map[string]any{
-		"creator":        arr(uuid, "maxItems", 20, "description", "Creator agent UUIDs; ranks only, never filters"),
-		"performer":      arr(uuid, "maxItems", 20, "description", "Performer agent UUIDs; ranks only, never filters"),
-		"label":          arr(uuid, "maxItems", 20, "description", "Label/publisher agent UUIDs; ranks only, never filters"),
-		"catalog_number": arr(val, "maxItems", 20, "description", "Catalog numbers; ranks only, never filters"),
-	})
+	contextSchema := identityContextSchema()
 	query := obj(map[string]any{
 		"key":            map[string]any{"type": "string", "minLength": 1, "maxLength": 64, "description": "Client correlation key; unique within the batch"},
 		"kind":           map[string]any{"type": "string", "enum": entityKinds},

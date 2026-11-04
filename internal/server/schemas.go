@@ -12,6 +12,7 @@ var uuidPattern = regexp.MustCompile(`^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]
 // definitions-driven rules (field codes, vocabularies, relationship rules).
 
 var entityKinds = []string{"agent", "collection", "work", "content_unit", "expression", "release", "medium", "track"}
+var relationshipClasses = []string{"ownership", "placement", "inclusion", "semantic", "reference"}
 
 func str() map[string]any { return map[string]any{"type": "string"} }
 func ref(name string) map[string]any {
@@ -89,6 +90,17 @@ func workspaceStageSchema() map[string]any {
 	}, "workspace_id", "expected_version", "operations"))
 }
 
+func identityContextSchema() map[string]any {
+	val := map[string]any{"type": "string", "maxLength": 256}
+	uuid := uuidSchema()
+	return obj(map[string]any{
+		"creator":        arr(uuid, "maxItems", 20, "description", "Creator agent UUIDs; ranks only, never filters"),
+		"performer":      arr(uuid, "maxItems", 20, "description", "Performer agent UUIDs; ranks only, never filters"),
+		"label":          arr(uuid, "maxItems", 20, "description", "Label/publisher agent UUIDs; ranks only, never filters"),
+		"catalog_number": arr(val, "maxItems", 20, "description", "Catalog numbers; ranks only, never filters"),
+	})
+}
+
 func candidateQuerySchema() map[string]any {
 	val := map[string]any{"type": "string", "maxLength": 256}
 	return obj(map[string]any{
@@ -100,6 +112,7 @@ func candidateQuerySchema() map[string]any {
 		"release_id":     map[string]any{"type": "string", "format": "uuid"},
 		"medium_id":      map[string]any{"type": "string", "format": "uuid"},
 		"limit":          map[string]any{"type": "integer", "minimum": 1, "maximum": 1000},
+		"context":        identityContextSchema(),
 	}, "kind")
 }
 
@@ -107,10 +120,17 @@ func relationshipQuerySchema() map[string]any {
 	return obj(map[string]any{
 		"ids":        arr(map[string]any{"type": "string", "format": "uuid"}, "minItems", 1, "maxItems", 20),
 		"direction":  map[string]any{"type": "string", "enum": []string{"both", "outgoing", "incoming"}},
+		"classes":    arr(map[string]any{"type": "string", "enum": relationshipClasses}),
 		"rule_codes": arr(str()),
 		"peer_kinds": arr(map[string]any{"type": "string", "enum": entityKinds}),
 		"limit":      map[string]any{"type": "integer", "minimum": 1, "maximum": 100},
 		"offset":     map[string]any{"type": "integer", "minimum": 0},
+	}, "ids")
+}
+
+func entityBatchSchema() map[string]any {
+	return obj(map[string]any{
+		"ids": arr(uuidSchema(), "minItems", 1, "maxItems", 100),
 	}, "ids")
 }
 

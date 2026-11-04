@@ -48,9 +48,10 @@ func fakeGraph(t *testing.T, queries *atomic.Int32) *httptest.Server {
 		case r.URL.Path == "/api/catalog/relationships/query":
 			queries.Add(1)
 			var body struct {
-				IDs    []string `json:"ids"`
-				Limit  int      `json:"limit"`
-				Offset int      `json:"offset"`
+				IDs     []string `json:"ids"`
+				Classes []string `json:"classes"`
+				Limit   int      `json:"limit"`
+				Offset  int      `json:"offset"`
 			}
 			b, _ := io.ReadAll(r.Body)
 			json.Unmarshal(b, &body)
@@ -65,6 +66,19 @@ func fakeGraph(t *testing.T, queries *atomic.Int32) *httptest.Server {
 				if !ok {
 					un = append(un, id)
 					continue
+				}
+				if len(body.Classes) > 0 {
+					filtered := make([]map[string]any, 0, len(items))
+					for _, edge := range items {
+						cls, _ := edge["class"].(string)
+						for _, allowed := range body.Classes {
+							if cls == allowed {
+								filtered = append(filtered, edge)
+								break
+							}
+						}
+					}
+					items = filtered
 				}
 				end := min(body.Offset+body.Limit, len(items))
 				page := []map[string]any{}
@@ -112,6 +126,10 @@ func TestGraphReadPaginatesMergesAndTraverses(t *testing.T) {
 	r = s.graphRead(ctx, graphInput{IDs: []string{gRelease}, Depth: 1})
 	if m = structured(t, r); m["complete"] != true || m["edge_counts"].(map[string]any)["reference"] != float64(150) {
 		t.Fatal("depth 1 release", m["incomplete_reasons"])
+	}
+	r = s.graphRead(ctx, graphInput{IDs: []string{gRelease}, Depth: 1, Classes: []string{"semantic"}})
+	if m = structured(t, r); m["complete"] != true || m["edge_counts"].(map[string]any)["semantic"] != float64(1) || m["edge_counts"].(map[string]any)["reference"] != nil {
+		t.Fatal("classes filter not forwarded", m)
 	}
 }
 

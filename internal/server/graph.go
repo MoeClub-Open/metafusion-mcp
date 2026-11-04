@@ -25,6 +25,7 @@ type graphInput struct {
 	IDs         []string `json:"ids"`
 	Depth       int      `json:"depth"`
 	Direction   string   `json:"direction"`
+	Classes     []string `json:"classes"`
 	RuleCodes   []string `json:"rule_codes"`
 	PeerKinds   []string `json:"peer_kinds"`
 	MaxEntities int      `json:"max_entities"`
@@ -35,6 +36,7 @@ func graphSchema() map[string]any {
 		"ids":          arr(map[string]any{"type": "string", "format": "uuid"}, "minItems", 1, "maxItems", graphMaxEntities),
 		"depth":        map[string]any{"type": "integer", "minimum": 1, "maximum": graphMaxDepth, "description": "Hops to expand (default 1). 3 covers Work -> Release -> Medium -> Track."},
 		"direction":    map[string]any{"type": "string", "enum": []string{"both", "outgoing", "incoming"}},
+		"classes":      arr(map[string]any{"type": "string", "enum": relationshipClasses}, "description", "Optional edge class filter: ownership, placement, inclusion, semantic, reference."),
 		"rule_codes":   arr(str()),
 		"peer_kinds":   arr(map[string]any{"type": "string", "enum": entityKinds}),
 		"max_entities": map[string]any{"type": "integer", "minimum": 1, "maximum": graphMaxEntities},
@@ -151,6 +153,9 @@ func (s *Server) graphRead(ctx context.Context, in graphInput) *mcp.CallToolResu
 					break
 				}
 				body := map[string]any{"ids": pending, "direction": in.Direction, "limit": graphPageLimit, "offset": page * graphPageLimit}
+				if len(in.Classes) > 0 {
+					body["classes"] = in.Classes
+				}
 				if len(in.RuleCodes) > 0 {
 					body["rule_codes"] = in.RuleCodes
 				}

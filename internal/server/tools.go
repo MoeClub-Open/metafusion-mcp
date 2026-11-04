@@ -87,8 +87,9 @@ func (s *Server) addTools() {
 		Body                            map[string]any
 	}{
 		{"metafusion_search", "GET", "/api/catalog/entities", "Search/list catalog entities using the current API query parameters and pagination. Search uses the instance's OpenSearch.", true, nil},
-		{"metafusion_relationships", "POST", "/api/catalog/relationships/query", "Query direct structural, semantic and attribute-reference neighbors of 1-20 entity UUIDs. body follows RelationshipQueryRequest; results are paginated per subject, so follow has_more/offset before concluding a relation is absent.", true, relationshipQuerySchema()},
-		{"metafusion_candidates", "POST", "/api/catalog/entities/candidates", "Optionally search identity candidates when useful before creating entities. body follows IdentityCandidateQuery: kind plus at least one of titles, external_links or attributes.", true, candidateQuerySchema()},
+		{"metafusion_entities_batch", "POST", "/api/catalog/entities/batch", "Batch-read 1-100 visible catalog entities by UUID in one repeatable-read snapshot, returning complete structural fields, display covers and missing IDs.", true, entityBatchSchema()},
+		{"metafusion_relationships", "POST", "/api/catalog/relationships/query", "Query direct structural, semantic and attribute-reference neighbors of 1-20 entity UUIDs. body follows RelationshipQueryRequest (direction, classes, rule_codes, peer_kinds, limit, offset); results are paginated per subject, so follow has_more/offset before concluding a relation is absent.", true, relationshipQuerySchema()},
+		{"metafusion_candidates", "POST", "/api/catalog/entities/candidates", "Optionally search identity candidates when useful before creating entities. body follows IdentityCandidateQuery: kind plus at least one of titles, external_links or attributes, with optional ranking context.", true, candidateQuerySchema()},
 	}
 	for _, item := range shortcuts {
 		item := item
@@ -147,7 +148,7 @@ func readOperation(method, p string) bool {
 	if method == "GET" || method == "HEAD" {
 		return true
 	}
-	return method == "POST" && slices.Contains([]string{"/api/catalog/relationships/query", "/api/catalog/entities/candidates", "/api/catalog/entities/candidates/batch", "/api/catalog/entities/identity", "/api/catalog/expressions/details", "/api/catalog/quality/batch", "/api/external-sources/query", "/api/external-sources/fetch", "/api/external-sources/wiki"}, p)
+	return method == "POST" && slices.Contains([]string{"/api/catalog/entities/batch", "/api/catalog/relationships/query", "/api/catalog/entities/candidates", "/api/catalog/entities/candidates/batch", "/api/catalog/entities/identity", "/api/catalog/expressions/details", "/api/catalog/quality/batch", "/api/external-sources/query", "/api/external-sources/fetch", "/api/external-sources/wiki"}, p)
 }
 func queryValues(in map[string]any) (url.Values, error) {
 	q := url.Values{}

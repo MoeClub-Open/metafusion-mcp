@@ -37,7 +37,7 @@ func TestReadOperationExternalSourceQuery(t *testing.T) {
 		t.Fatal("PUT must not be treated as read")
 	}
 	// Same allowlist family as other read-only POSTs
-	for _, p := range []string{"/api/catalog/entities/candidates/batch", "/api/catalog/quality/batch"} {
+	for _, p := range []string{"/api/catalog/entities/batch", "/api/catalog/entities/candidates/batch", "/api/catalog/quality/batch"} {
 		if !readOperation("POST", p) {
 			t.Fatalf("missing allowlist entry %s", p)
 		}
