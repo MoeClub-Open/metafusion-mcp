@@ -113,7 +113,7 @@ func (s *Server) addTools() {
 			}
 			args.Method = item.Method
 			args.Path = item.Path
-			return s.callAPI(ctx, args), nil
+			return compactShortcutResult(item.Name, s.callAPI(ctx, args)), nil
 		})
 	}
 	s.MCP.AddResource(&mcp.Resource{URI: "metafusion://workflow", Name: "Catalog collaboration workflow", MIMEType: "text/markdown"}, func(context.Context, *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
@@ -350,6 +350,98 @@ func (s *Server) callAPI(ctx context.Context, in APIInput) *mcp.CallToolResult {
 	s.logUpstream(ctx, rid, method, in.Path, res.StatusCode, code, started)
 	return result(m, out.IsError)
 }
+
+func compactShortcutResult(toolName string, r *mcp.CallToolResult) *mcp.CallToolResult {
+	if r == nil || r.IsError {
+		return r
+	}
+	m, ok := r.StructuredContent.(map[string]any)
+	if !ok || m["ok"] != true {
+		return r
+	}
+	data, ok := m["data"].(map[string]any)
+	if !ok {
+		return r
+	}
+	switch toolName {
+	case "metafusion_search":
+		covers, _ := data["covers"].(map[string]any)
+		items, _ := data["items"].([]any)
+		for _, rawItem := range items {
+			ent, ok := rawItem.(map[string]any)
+			if !ok {
+				continue
+			}
+			id, _ := ent["id"].(string)
+			if id != "" {
+				ent["url"] = "/catalog/" + id
+			}
+			if pics, ok := ent["pictures"].([]any); ok && len(pics) > 0 {
+				if p0, ok := pics[0].(map[string]any); ok {
+					if u, _ := p0["url"].(string); u != "" {
+						ent["cover_url"] = u
+					}
+				}
+			}
+			if _, hasCover := ent["cover_url"]; !hasCover && covers != nil && id != "" {
+				if cObj, ok := covers[id].(map[string]any); ok {
+					if u, _ := cObj["url"].(string); u != "" {
+						ent["cover_url"] = u
+					}
+				}
+			}
+			if trMap, ok := ent["translations"].(map[string]any); ok {
+				for _, trRaw := range trMap {
+					if tr, ok := trRaw.(map[string]any); ok {
+						if body, _ := tr["body"].(string); len([]rune(body)) > 300 {
+							r := []rune(body)
+							tr["body"] = string(r[:300]) + "…"
+						}
+					}
+				}
+			}
+		}
+	case "metafusion_relationships":
+		ents, _ := data["entities"].(map[string]any)
+		for id, v := range ents {
+			ents[id] = compactGraphEntity(id, v)
+		}
+		pages, _ := data["pages"].([]any)
+		for _, rawPage := range pages {
+			p, ok := rawPage.(map[string]any)
+			if !ok {
+				continue
+			}
+			subjectID, _ := p["subject_id"].(string)
+			items, _ := p["items"].([]any)
+			for _, rawLink := range items {
+				link, ok := rawLink.(map[string]any)
+				if !ok {
+					continue
+				}
+				srcID, _ := link["source_id"].(string)
+				dstID, _ := link["target_id"].(string)
+				peerID := dstID
+				if peerID == subjectID {
+					peerID = srcID
+				}
+				if peerID != "" {
+					link["peer_id"] = peerID
+					if peerEnt, ok := ents[peerID].(map[string]any); ok {
+						if k, _ := peerEnt["kind"].(string); k != "" {
+							link["peer_kind"] = k
+						}
+						if t, _ := peerEnt["title"].(string); t != "" {
+							link["peer_title"] = t
+						}
+					}
+				}
+			}
+		}
+	}
+	return result(m, false)
+}
+
 func (s *Server) contract(ctx context.Context, args json.RawMessage) *mcp.CallToolResult {
 	var in struct {
 		Path         string `json:"path"`

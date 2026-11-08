@@ -173,7 +173,7 @@ func (s *Server) graphRead(ctx context.Context, in graphInput) *mcp.CallToolResu
 				}
 				if ents, ok := data["entities"].(map[string]any); ok {
 					for k, v := range ents {
-						entities[k] = v
+						entities[k] = compactGraphEntity(k, v)
 					}
 				}
 				for _, u := range asStrings(data["unavailable_ids"]) {
@@ -206,6 +206,20 @@ func (s *Server) graphRead(ctx context.Context, in graphInput) *mcp.CallToolResu
 	}
 	list := make([]map[string]any, 0, len(edges))
 	for _, e := range edges {
+		if srcID, _ := e["source_id"].(string); srcID != "" {
+			if srcEnt, _ := entities[srcID].(map[string]any); srcEnt != nil {
+				if title, _ := srcEnt["title"].(string); title != "" {
+					e["source_title"] = title
+				}
+			}
+		}
+		if dstID, _ := e["target_id"].(string); dstID != "" {
+			if dstEnt, _ := entities[dstID].(map[string]any); dstEnt != nil {
+				if title, _ := dstEnt["title"].(string); title != "" {
+					e["target_title"] = title
+				}
+			}
+		}
 		list = append(list, e)
 	}
 	sort.Slice(list, func(i, j int) bool { return list[i]["key"].(string) < list[j]["key"].(string) })
@@ -223,6 +237,52 @@ func (s *Server) graphRead(ctx context.Context, in graphInput) *mcp.CallToolResu
 		out["errors"] = errorsSeen
 	}
 	return result(out, false)
+}
+
+func compactGraphEntity(id string, raw any) any {
+	m, ok := raw.(map[string]any)
+	if !ok {
+		return raw
+	}
+	out := make(map[string]any, len(m)+1)
+	for k, v := range m {
+		if k == "translations" {
+			continue
+		}
+		out[k] = v
+	}
+	if id != "" {
+		out["url"] = "/catalog/" + id
+	}
+	mainTitle, _ := m["title"].(string)
+	if trMap, ok := m["translations"].(map[string]any); ok && len(trMap) > 0 {
+		titles := map[string]string{}
+		summary := ""
+		for loc, trRaw := range trMap {
+			tr, ok := trRaw.(map[string]any)
+			if !ok {
+				continue
+			}
+			if t, _ := tr["title"].(string); t != "" && t != mainTitle {
+				titles[loc] = t
+			}
+			if summary == "" {
+				if s, _ := tr["summary"].(string); s != "" {
+					if r := []rune(s); len(r) > 160 {
+						s = string(r[:160]) + "…"
+					}
+					summary = s
+				}
+			}
+		}
+		if len(titles) > 0 {
+			out["titles"] = titles
+		}
+		if summary != "" {
+			out["summary"] = summary
+		}
+	}
+	return out
 }
 
 func asStrings(v any) []string {
