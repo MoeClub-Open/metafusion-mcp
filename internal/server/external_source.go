@@ -16,19 +16,51 @@ func externalSourceQuerySchema() map[string]any {
 		"required":             []string{"op"},
 		"additionalProperties": false,
 		"properties": map[string]any{
-			"source":      map[string]any{"type": "string", "description": "Adapter id: bangumi|dlsite|dmm; empty/auto allowed"},
-			"op":          map[string]any{"type": "string", "enum": []string{"search", "lookup", "detail"}},
-			"q":           map[string]any{"type": "string", "description": "Search keyword (required for op=search)"},
-			"id":          map[string]any{"type": "string", "description": "Exact source id (lookup/detail)"},
-			"url_or_id":   map[string]any{"type": "string", "description": "URL or id (lookup/detail; alternative to id)"},
-			"entity_type": map[string]any{"type": "string", "enum": []string{"work", "artist", "organization", "character"}},
-			"limit":       map[string]any{"type": "integer", "minimum": 1, "maximum": 50, "description": "Search page size (default 20)"},
+			"source":          map[string]any{"type": "string", "description": "Adapter id: bangumi|dlsite|dmm; empty/auto allowed"},
+			"op":              map[string]any{"type": "string", "enum": []string{"search", "lookup", "detail"}},
+			"q":               map[string]any{"type": "string", "description": "Search keyword (required for op=search)"},
+			"id":              map[string]any{"type": "string", "description": "Exact source id (lookup/detail)"},
+			"url_or_id":       map[string]any{"type": "string", "description": "URL or id (lookup/detail; alternative to id)"},
+			"entity_type":     map[string]any{"type": "string", "enum": []string{"work", "artist", "organization", "character"}},
+			"limit":           map[string]any{"type": "integer", "minimum": 1, "maximum": 50, "description": "Search page size (default 20)"},
+			"include_raw":     map[string]any{"type": "boolean", "description": "Include upstream raw JSON payload in addition to normalized items/preview (default false to save tokens)"},
+			"include_preview": map[string]any{"type": "boolean", "description": "Include mapped entity preview on lookup/detail (default true)"},
 		},
 	}
 }
 
 func (s *Server) externalSourceQuery(ctx context.Context, body map[string]any) *mcp.CallToolResult {
-	return s.callAPI(ctx, APIInput{Method: "POST", Path: "/api/external-sources/query", Body: body})
+	includeRaw, _ := body["include_raw"].(bool)
+	includePreview := true
+	if v, ok := body["include_preview"].(bool); ok {
+		includePreview = v
+	}
+	upstreamBody := make(map[string]any, len(body))
+	for k, v := range body {
+		if k != "include_raw" && k != "include_preview" {
+			upstreamBody[k] = v
+		}
+	}
+	r := s.callAPI(ctx, APIInput{Method: "POST", Path: "/api/external-sources/query", Body: upstreamBody})
+	if r == nil || r.IsError {
+		return r
+	}
+	m, ok := r.StructuredContent.(map[string]any)
+	if !ok || m["ok"] != true {
+		return r
+	}
+	data, ok := m["data"].(map[string]any)
+	if !ok {
+		return r
+	}
+	if !includePreview {
+		delete(data, "preview")
+	}
+	items, _ := data["items"].([]any)
+	if !includeRaw && (len(items) > 0 || data["preview"] != nil) {
+		delete(data, "raw")
+	}
+	return result(m, false)
 }
 
 func (s *Server) addExternalSourceTool() {

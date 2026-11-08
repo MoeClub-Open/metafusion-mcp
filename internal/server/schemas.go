@@ -84,9 +84,10 @@ func uuidSchema() map[string]any { return map[string]any{"type": "string", "form
 
 func workspaceStageSchema() map[string]any {
 	return withDefs(obj(map[string]any{
-		"workspace_id":     uuidSchema(),
-		"expected_version": map[string]any{"type": "integer", "minimum": 1},
-		"operations":       arr(ref("WorkspaceOperation"), "minItems", 1, "maxItems", 100),
+		"workspace_id":      uuidSchema(),
+		"expected_version":  map[string]any{"type": "integer", "minimum": 1},
+		"operations":        arr(ref("WorkspaceOperation"), "minItems", 1, "maxItems", 100),
+		"include_documents": map[string]any{"type": "boolean", "description": "Include full staged documents in response (default false to save tokens)"},
 	}, "workspace_id", "expected_version", "operations"))
 }
 
@@ -118,19 +119,24 @@ func candidateQuerySchema() map[string]any {
 
 func relationshipQuerySchema() map[string]any {
 	return obj(map[string]any{
-		"ids":        arr(map[string]any{"type": "string", "format": "uuid"}, "minItems", 1, "maxItems", 20),
-		"direction":  map[string]any{"type": "string", "enum": []string{"both", "outgoing", "incoming"}},
-		"classes":    arr(map[string]any{"type": "string", "enum": relationshipClasses}),
-		"rule_codes": arr(str()),
-		"peer_kinds": arr(map[string]any{"type": "string", "enum": entityKinds}),
-		"limit":      map[string]any{"type": "integer", "minimum": 1, "maximum": 100},
-		"offset":     map[string]any{"type": "integer", "minimum": 0},
+		"ids":              arr(map[string]any{"type": "string", "format": "uuid"}, "minItems", 1, "maxItems", 20),
+		"direction":        map[string]any{"type": "string", "enum": []string{"both", "outgoing", "incoming"}},
+		"classes":          arr(map[string]any{"type": "string", "enum": relationshipClasses}),
+		"rule_codes":       arr(str()),
+		"peer_kinds":       arr(map[string]any{"type": "string", "enum": entityKinds}),
+		"limit":            map[string]any{"type": "integer", "minimum": 1, "maximum": 100},
+		"offset":           map[string]any{"type": "integer", "minimum": 0},
+		"include_entities": map[string]any{"type": "boolean", "description": "Include top-level entities dictionary (default false; peer_id/peer_kind/peer_title are already inline on each edge)"},
 	}, "ids")
 }
 
 func entityBatchSchema() map[string]any {
 	return obj(map[string]any{
-		"ids": arr(uuidSchema(), "minItems", 1, "maxItems", 100),
+		"ids":            arr(uuidSchema(), "minItems", 1, "maxItems", 100),
+		"fields":         arr(str(), "maxItems", 30, "description", "Optional top-level entity fields to return (e.g. translations, attributes, external_links, pictures, subjects, contents)"),
+		"locales":        arr(str(), "maxItems", 10, "description", "Optional locale filter for translations (e.g. ja-JP, zh-CN, en-US)"),
+		"attribute_keys": arr(str(), "maxItems", 30, "description", "Optional attribute key filter for /attributes"),
+		"include_body":   map[string]any{"type": "boolean", "description": "Include full long article body in translations (default false)"},
 	}, "ids")
 }
 

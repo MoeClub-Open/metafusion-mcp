@@ -113,7 +113,8 @@ func (s *Server) addTools() {
 			}
 			args.Method = item.Method
 			args.Path = item.Path
-			return compactShortcutResult(item.Name, s.callAPI(ctx, args)), nil
+			opts := extractShortcutOptions(item.Name, &args)
+			return compactShortcutResultWithOptions(item.Name, s.callAPI(ctx, args), opts), nil
 		})
 	}
 	s.MCP.AddResource(&mcp.Resource{URI: "metafusion://workflow", Name: "Catalog collaboration workflow", MIMEType: "text/markdown"}, func(context.Context, *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
@@ -352,6 +353,143 @@ func (s *Server) callAPI(ctx context.Context, in APIInput) *mcp.CallToolResult {
 }
 
 func compactShortcutResult(toolName string, r *mcp.CallToolResult) *mcp.CallToolResult {
+	return compactShortcutResultWithOptions(toolName, r, shortcutOptions{includeEntities: true})
+}
+
+type shortcutOptions struct {
+	fields          []string
+	locales         []string
+	attributeKeys   []string
+	includeBody     bool
+	includeEntities bool
+}
+
+func toStringSlice(v any) []string {
+	switch x := v.(type) {
+	case []string:
+		return x
+	case []any:
+		out := make([]string, 0, len(x))
+		for _, item := range x {
+			if s, ok := item.(string); ok && strings.TrimSpace(s) != "" {
+				out = append(out, strings.TrimSpace(s))
+			}
+		}
+		return out
+	case string:
+		var out []string
+		for _, part := range strings.Split(x, ",") {
+			if s := strings.TrimSpace(part); s != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
+func extractShortcutOptions(toolName string, args *APIInput) shortcutOptions {
+	opts := shortcutOptions{}
+	if args == nil {
+		return opts
+	}
+	if args.Query != nil {
+		if f, ok := args.Query["fields"]; ok {
+			opts.fields = toStringSlice(f)
+			delete(args.Query, "fields")
+		}
+	}
+	if bodyMap, ok := args.Body.(map[string]any); ok {
+		switch toolName {
+		case "metafusion_entities_batch":
+			opts.fields = toStringSlice(bodyMap["fields"])
+			opts.locales = toStringSlice(bodyMap["locales"])
+			opts.attributeKeys = toStringSlice(bodyMap["attribute_keys"])
+			opts.includeBody, _ = bodyMap["include_body"].(bool)
+			delete(bodyMap, "fields")
+			delete(bodyMap, "locales")
+			delete(bodyMap, "attribute_keys")
+			delete(bodyMap, "include_body")
+		case "metafusion_relationships":
+			opts.includeEntities, _ = bodyMap["include_entities"].(bool)
+			delete(bodyMap, "include_entities")
+		}
+	}
+	return opts
+}
+
+func filterEntityMap(ent map[string]any, covers map[string]any, opts shortcutOptions) {
+	id, _ := ent["id"].(string)
+	if id != "" {
+		ent["url"] = "/catalog/" + id
+	}
+	if pics, ok := ent["pictures"].([]any); ok && len(pics) > 0 {
+		if p0, ok := pics[0].(map[string]any); ok {
+			if u, _ := p0["url"].(string); u != "" {
+				ent["cover_url"] = u
+			}
+		}
+	}
+	if _, hasCover := ent["cover_url"]; !hasCover && covers != nil && id != "" {
+		if cObj, ok := covers[id].(map[string]any); ok {
+			if u, _ := cObj["url"].(string); u != "" {
+				ent["cover_url"] = u
+			}
+		}
+	}
+	if len(opts.locales) > 0 {
+		if trMap, ok := ent["translations"].(map[string]any); ok {
+			allowed := make(map[string]bool, len(opts.locales))
+			for _, l := range opts.locales {
+				allowed[l] = true
+			}
+			for loc := range trMap {
+				if !allowed[loc] {
+					delete(trMap, loc)
+				}
+			}
+		}
+	}
+	if len(opts.attributeKeys) > 0 {
+		if attrMap, ok := ent["attributes"].(map[string]any); ok {
+			allowed := make(map[string]bool, len(opts.attributeKeys))
+			for _, k := range opts.attributeKeys {
+				allowed[k] = true
+			}
+			for k := range attrMap {
+				if !allowed[k] {
+					delete(attrMap, k)
+				}
+			}
+		}
+	}
+	if !opts.includeBody {
+		if trMap, ok := ent["translations"].(map[string]any); ok {
+			for _, trRaw := range trMap {
+				if tr, ok := trRaw.(map[string]any); ok {
+					if body, _ := tr["body"].(string); len([]rune(body)) > 300 {
+						r := []rune(body)
+						tr["body"] = string(r[:300]) + "…"
+					}
+				}
+			}
+		}
+	}
+	if len(opts.fields) > 0 {
+		keep := map[string]bool{"id": true, "kind": true, "title": true, "url": true, "version": true}
+		for _, f := range opts.fields {
+			keep[f] = true
+		}
+		for k := range ent {
+			if !keep[k] {
+				delete(ent, k)
+			}
+		}
+	}
+}
+
+func compactShortcutResultWithOptions(toolName string, r *mcp.CallToolResult, opts shortcutOptions) *mcp.CallToolResult {
 	if r == nil || r.IsError {
 		return r
 	}
@@ -372,35 +510,19 @@ func compactShortcutResult(toolName string, r *mcp.CallToolResult) *mcp.CallTool
 			if !ok {
 				continue
 			}
-			id, _ := ent["id"].(string)
-			if id != "" {
-				ent["url"] = "/catalog/" + id
-			}
-			if pics, ok := ent["pictures"].([]any); ok && len(pics) > 0 {
-				if p0, ok := pics[0].(map[string]any); ok {
-					if u, _ := p0["url"].(string); u != "" {
-						ent["cover_url"] = u
-					}
-				}
-			}
-			if _, hasCover := ent["cover_url"]; !hasCover && covers != nil && id != "" {
-				if cObj, ok := covers[id].(map[string]any); ok {
-					if u, _ := cObj["url"].(string); u != "" {
-						ent["cover_url"] = u
-					}
-				}
-			}
-			if trMap, ok := ent["translations"].(map[string]any); ok {
-				for _, trRaw := range trMap {
-					if tr, ok := trRaw.(map[string]any); ok {
-						if body, _ := tr["body"].(string); len([]rune(body)) > 300 {
-							r := []rune(body)
-							tr["body"] = string(r[:300]) + "…"
-						}
-					}
+			filterEntityMap(ent, covers, opts)
+		}
+		delete(data, "covers")
+	case "metafusion_entities_batch":
+		covers, _ := data["covers"].(map[string]any)
+		if items, ok := data["items"].(map[string]any); ok {
+			for _, rawEnt := range items {
+				if ent, ok := rawEnt.(map[string]any); ok {
+					filterEntityMap(ent, covers, opts)
 				}
 			}
 		}
+		delete(data, "covers")
 	case "metafusion_relationships":
 		ents, _ := data["entities"].(map[string]any)
 		for id, v := range ents {
@@ -437,6 +559,9 @@ func compactShortcutResult(toolName string, r *mcp.CallToolResult) *mcp.CallTool
 					}
 				}
 			}
+		}
+		if !opts.includeEntities {
+			delete(data, "entities")
 		}
 	}
 	return result(m, false)

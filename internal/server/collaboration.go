@@ -120,13 +120,99 @@ func (s *Server) addCollaborationTools() {
 				apiPath = strings.Replace(apiPath, "{id}", body[op.pathID].(string), 1)
 				delete(body, op.pathID)
 			}
+			includeDocs := op.name != "workspace_stage" && op.name != "workspace_edit" && op.name != "workspace_members"
+			if v, ok := body["include_documents"].(bool); ok {
+				includeDocs = v
+				delete(body, "include_documents")
+			}
 			in := APIInput{Method: op.method, Path: apiPath}
 			if op.method == "GET" {
 				in.Query = body
 			} else {
 				in.Body = body
 			}
-			return withWorkspaceConflicts(s.callAPI(ctx, in)), nil
+			return compactCollaborationResult(op.name, includeDocs, withWorkspaceConflicts(s.callAPI(ctx, in))), nil
 		})
 	}
+}
+
+func compactWorkspaceMap(ws map[string]any, includeDocs bool) {
+	if ws == nil {
+		return
+	}
+	objects, _ := ws["objects"].([]any)
+	for _, rawObj := range objects {
+		obj, ok := rawObj.(map[string]any)
+		if !ok {
+			continue
+		}
+		delete(obj, "base")
+		delete(obj, "committed")
+		if !includeDocs {
+			delete(obj, "document")
+		}
+	}
+}
+
+func compactCommitMap(commit map[string]any) {
+	if commit == nil {
+		return
+	}
+	changes, _ := commit["changes"].([]any)
+	for _, rawCh := range changes {
+		ch, ok := rawCh.(map[string]any)
+		if !ok {
+			continue
+		}
+		delete(ch, "base")
+		delete(ch, "before")
+		delete(ch, "after")
+	}
+}
+
+func compactCollaborationResult(opName string, includeDocs bool, r *mcp.CallToolResult) *mcp.CallToolResult {
+	if r == nil || r.IsError {
+		return r
+	}
+	m, ok := r.StructuredContent.(map[string]any)
+	if !ok || m["ok"] != true {
+		return r
+	}
+	data, ok := m["data"].(map[string]any)
+	if !ok {
+		return r
+	}
+	switch opName {
+	case "workspace_create", "workspace_get", "workspace_edit", "workspace_checkout", "workspace_members":
+		compactWorkspaceMap(data, includeDocs)
+	case "workspace_stage":
+		if ws, ok := data["workspace"].(map[string]any); ok {
+			compactWorkspaceMap(ws, includeDocs)
+		}
+	case "workspace_commit":
+		compactCommitMap(data)
+	case "workspace_push":
+		if ws, ok := data["workspace"].(map[string]any); ok {
+			delete(ws, "objects")
+		}
+		if commits, ok := data["commits"].([]any); ok {
+			for _, rawC := range commits {
+				if c, ok := rawC.(map[string]any); ok {
+					compactCommitMap(c)
+				}
+			}
+		}
+		if pr, ok := data["pull_request"].(map[string]any); ok {
+			delete(pr, "changes")
+			delete(pr, "commits")
+		}
+	case "workspace_rebase", "workspace_version":
+		if ws, ok := data["workspace"].(map[string]any); ok {
+			compactWorkspaceMap(ws, false)
+		}
+		if c, ok := data["commit"].(map[string]any); ok {
+			compactCommitMap(c)
+		}
+	}
+	return result(m, false)
 }
