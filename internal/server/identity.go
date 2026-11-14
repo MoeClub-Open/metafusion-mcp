@@ -24,6 +24,7 @@ func identityCheckSchema() map[string]any {
 		"release_id":     uuid,
 		"medium_id":      uuid,
 		"limit":          map[string]any{"type": "integer", "minimum": 1, "maximum": 1000},
+		"include_approximate": map[string]any{"type": "boolean", "description": "Also recall substring and pg_trgm approximate title candidates (assessed as title_similar with recommended_action=review) alongside exact, alias, and core-normalized matches"},
 		"context":        contextSchema,
 	}, "key", "kind")
 	return map[string]any{"type": "object", "required": []string{"queries"}, "additionalProperties": false, "properties": map[string]any{
@@ -37,7 +38,7 @@ func (s *Server) identityCheck(ctx context.Context, queries []map[string]any) *m
 
 func (s *Server) addIdentityTool() {
 	schema := withDefs(identityCheckSchema())
-	s.MCP.AddTool(&mcp.Tool{Name: "catalog_identity_check", Description: "Batch identity candidate check (1-50 queries) via POST /api/catalog/entities/candidates/batch. Optional context {creator,performer,label,catalog_number} only adjusts ranking/confidence/recommended_action — it NEVER filters candidates (same-name different-artist entities remain). Each item carries assessment {matched_fields, conflicts?, context_summary?, confidence, recommended_action: reuse|review|distinct}; advisory only — the server never auto-merges. Per-query validation failures appear as results[].error. Read-only; edit through server workspace staging, commits and push.", InputSchema: schema, Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, r *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.MCP.AddTool(&mcp.Tool{Name: "catalog_identity_check", Description: "Batch identity candidate check (1-50 queries) via POST /api/catalog/entities/candidates/batch. Required before creating new entities (pass include_approximate=true to also recall substring and pg_trgm approximate title candidates alongside exact, alias, and core-normalized matches). Optional context {creator,performer,label,catalog_number} only adjusts ranking/confidence/recommended_action — it NEVER filters candidates (same-name different-artist entities remain). Each item carries assessment {matched_fields, conflicts?, context_summary?, confidence, recommended_action: reuse|review|distinct}; advisory only — inspect close candidates before deciding to reuse or create. Per-query validation failures appear as results[].error. Read-only; edit through server workspace staging, commits and push.", InputSchema: schema, Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, r *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if _, bad := validateArgs(schema, r.Params.Arguments); bad != nil {
 			return bad, nil
 		}

@@ -113,6 +113,7 @@ func candidateQuerySchema() map[string]any {
 		"release_id":     map[string]any{"type": "string", "format": "uuid"},
 		"medium_id":      map[string]any{"type": "string", "format": "uuid"},
 		"limit":          map[string]any{"type": "integer", "minimum": 1, "maximum": 1000},
+		"include_approximate": map[string]any{"type": "boolean", "description": "Also recall substring and pg_trgm approximate title candidates (assessed as title_similar with recommended_action=review) alongside exact, alias, and core-normalized matches"},
 		"context":        identityContextSchema(),
 	}, "kind")
 }
