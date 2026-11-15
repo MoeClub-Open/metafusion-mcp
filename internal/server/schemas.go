@@ -11,7 +11,7 @@ var uuidPattern = regexp.MustCompile(`^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]
 // every bad path at once; the upstream API remains authoritative for
 // definitions-driven rules (field codes, vocabularies, relationship rules).
 
-var entityKinds = []string{"agent", "collection", "work", "content_unit", "expression", "release", "medium", "track"}
+var entityKinds = []string{"agent", "collection", "work", "content_unit", "expression", "release", "medium", "track", "event"}
 var relationshipClasses = []string{"ownership", "placement", "inclusion", "semantic", "reference"}
 
 func str() map[string]any { return map[string]any{"type": "string"} }
@@ -125,6 +125,8 @@ func relationshipQuerySchema() map[string]any {
 		"classes":          arr(map[string]any{"type": "string", "enum": relationshipClasses}),
 		"rule_codes":       arr(str()),
 		"peer_kinds":       arr(map[string]any{"type": "string", "enum": entityKinds}),
+		"active_only":      map[string]any{"type": "boolean", "description": "Exclude ended or expired relationships"},
+		"as_of":            map[string]any{"type": "string", "pattern": "^\\d{4}(-\\d{2}(-\\d{2})?)?$", "description": "Filter relationships effective at YYYY, YYYY-MM, or YYYY-MM-DD"},
 		"limit":            map[string]any{"type": "integer", "minimum": 1, "maximum": 100},
 		"offset":           map[string]any{"type": "integer", "minimum": 0},
 		"include_entities": map[string]any{"type": "boolean", "description": "Include top-level entities dictionary (default false; peer_id/peer_kind/peer_title are already inline on each edge)"},

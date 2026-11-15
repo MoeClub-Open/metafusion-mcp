@@ -28,6 +28,8 @@ type graphInput struct {
 	Classes     []string `json:"classes"`
 	RuleCodes   []string `json:"rule_codes"`
 	PeerKinds   []string `json:"peer_kinds"`
+	ActiveOnly  *bool    `json:"active_only"`
+	AsOf        string   `json:"as_of"`
 	MaxEntities int      `json:"max_entities"`
 }
 
@@ -39,6 +41,8 @@ func graphSchema() map[string]any {
 		"classes":      arr(map[string]any{"type": "string", "enum": relationshipClasses}, "description", "Optional edge class filter: ownership, placement, inclusion, semantic, reference."),
 		"rule_codes":   arr(str()),
 		"peer_kinds":   arr(map[string]any{"type": "string", "enum": entityKinds}),
+		"active_only":  map[string]any{"type": "boolean", "description": "Exclude ended or expired relationships at every hop."},
+		"as_of":        map[string]any{"type": "string", "pattern": "^\\d{4}(-\\d{2}(-\\d{2})?)?$", "description": "Filter edges effective at YYYY, YYYY-MM, or YYYY-MM-DD."},
 		"max_entities": map[string]any{"type": "integer", "minimum": 1, "maximum": graphMaxEntities},
 	}, "ids")
 }
@@ -161,6 +165,12 @@ func (s *Server) graphRead(ctx context.Context, in graphInput) *mcp.CallToolResu
 				}
 				if len(in.PeerKinds) > 0 {
 					body["peer_kinds"] = in.PeerKinds
+				}
+				if in.ActiveOnly != nil {
+					body["active_only"] = *in.ActiveOnly
+				}
+				if in.AsOf != "" {
+					body["as_of"] = in.AsOf
 				}
 				data, bad := okData(s.callAPI(ctx, APIInput{Method: "POST", Path: "/api/catalog/relationships/query", Body: body}))
 				if bad != nil {

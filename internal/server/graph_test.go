@@ -48,10 +48,13 @@ func fakeGraph(t *testing.T, queries *atomic.Int32) *httptest.Server {
 		case r.URL.Path == "/api/catalog/relationships/query":
 			queries.Add(1)
 			var body struct {
-				IDs     []string `json:"ids"`
-				Classes []string `json:"classes"`
-				Limit   int      `json:"limit"`
-				Offset  int      `json:"offset"`
+				IDs        []string `json:"ids"`
+				Classes    []string `json:"classes"`
+				PeerKinds  []string `json:"peer_kinds"`
+				ActiveOnly *bool    `json:"active_only"`
+				AsOf       string   `json:"as_of"`
+				Limit      int      `json:"limit"`
+				Offset     int      `json:"offset"`
 			}
 			b, _ := io.ReadAll(r.Body)
 			json.Unmarshal(b, &body)
@@ -76,6 +79,15 @@ func fakeGraph(t *testing.T, queries *atomic.Int32) *httptest.Server {
 								filtered = append(filtered, edge)
 								break
 							}
+						}
+					}
+					items = filtered
+				}
+				if body.ActiveOnly != nil && *body.ActiveOnly && body.AsOf == "2020-01" {
+					filtered := make([]map[string]any, 0, len(items))
+					for _, edge := range items {
+						if edge["key"] == "rel-1" {
+							filtered = append(filtered, edge)
 						}
 					}
 					items = filtered
@@ -130,6 +142,11 @@ func TestGraphReadPaginatesMergesAndTraverses(t *testing.T) {
 	r = s.graphRead(ctx, graphInput{IDs: []string{gRelease}, Depth: 1, Classes: []string{"semantic"}})
 	if m = structured(t, r); m["complete"] != true || m["edge_counts"].(map[string]any)["semantic"] != float64(1) || m["edge_counts"].(map[string]any)["reference"] != nil {
 		t.Fatal("classes filter not forwarded", m)
+	}
+	activeOnly := true
+	r = s.graphRead(ctx, graphInput{IDs: []string{gRelease}, Depth: 1, PeerKinds: []string{"event"}, ActiveOnly: &activeOnly, AsOf: "2020-01"})
+	if m = structured(t, r); m["complete"] != true || m["edge_counts"].(map[string]any)["semantic"] != float64(1) || m["edge_counts"].(map[string]any)["reference"] != nil {
+		t.Fatal("temporal filters not forwarded", m)
 	}
 }
 
