@@ -81,23 +81,11 @@ func requestedBusinessScopes(raw string) ([]string, error) {
 		// mcp.read alone; other supported business scopes require a new request.
 		return append([]string(nil), defaultScopes...), nil
 	}
-	scopes := []string{}
-	for _, scope := range requested {
-		// Some OAuth clients append OIDC identity scopes. This resource server does
-		// not offer OIDC: leave them ungranted, never turn them into PAT permissions
-		// or imply an ID token. The token response reports only the granted scopes.
-		// Retired business scopes (e.g. catalog.import.submit) are NOT silently dropped:
-		// unknown codes fall through to invalid_scope — no compatibility aliases.
-		if scope == "openid" || scope == "email" || scope == "profile" {
-			continue
-		}
-		if !slices.Contains(supportedScopes, scope) {
-			return nil, errors.New("invalid_scope")
-		}
-		if !slices.Contains(scopes, scope) {
-			scopes = append(scopes, scope)
-		}
-	}
+	// Per RFC 6749 §3.3, narrow client-requested scopes (including OIDC identity
+	// scopes or stale scopes_supported cached by DCR connectors) to supportedScopes.
+	// Unsupported, wildcard, .manage, or retired codes are never offered or granted;
+	// the token response reports the exact granted scope list.
+	scopes := filterSupportedScopes(requested)
 	if len(scopes) == 0 {
 		return nil, errors.New("invalid_scope")
 	}
@@ -265,6 +253,30 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 		}
 		g, e = s.Store.Exchange(r.Context(), f.Get("client_id"), f.Get("code"), f.Get("redirect_uri"), f.Get("code_verifier"), access, refresh)
 	case "refresh_token":
+		target, err := s.Store.RefreshTarget(r.Context(), f.Get("client_id"), f.Get("refresh_token"))
+		if err != nil {
+			if errors.Is(err, ErrInvalidGrant) {
+				writeError(w, 400, "invalid_grant")
+			} else {
+				writeError(w, 503, "token_unavailable")
+			}
+			return
+		}
+		pat, err := decrypt(s.Config.Key, target.ID, target.Cipher)
+		if err != nil {
+			writeError(w, 400, "invalid_grant")
+			return
+		}
+		if pat != "" {
+			if _, err = s.introspect(r.Context(), target.UserID, pat); err != nil {
+				if errors.Is(err, errUpstreamUnavailable) {
+					writeError(w, 503, "token_unavailable")
+				} else {
+					writeError(w, 400, "invalid_grant")
+				}
+				return
+			}
+		}
 		g, e = s.Store.Refresh(r.Context(), f.Get("client_id"), f.Get("refresh_token"), access, refresh)
 	default:
 		writeError(w, 400, "unsupported_grant_type")
@@ -278,7 +290,7 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	writeJSON(w, 200, map[string]any{"access_token": access, "refresh_token": refresh, "token_type": "Bearer", "expires_in": 900, "scope": strings.Join(g.Scopes, " ")})
+	writeJSON(w, 200, map[string]any{"access_token": access, "refresh_token": refresh, "token_type": "Bearer", "expires_in": 900, "scope": strings.Join(filterSupportedScopes(g.Scopes), " ")})
 }
 func (s *Server) revokeToken(w http.ResponseWriter, r *http.Request) {
 	if r.ParseForm() != nil {

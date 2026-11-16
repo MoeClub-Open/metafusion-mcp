@@ -56,6 +56,7 @@ type User struct {
 }
 
 var supportedScopes = []string{"mcp.read", "mcp.web.write", "catalog.entity.edit", "catalog.relation.edit", "community.post.create", "community.post.moderate", "community.topic.pin", "community.report.review", "storage.asset.upload", "storage.asset.moderate", "auth.audit.read"}
+var errUpstreamUnavailable = errors.New("upstream_unavailable")
 
 // Local scopes are consented and enforced by MCP, never included in a platform PAT.
 func localScope(scope string) bool { return scope == "mcp.read" || scope == "mcp.web.write" }
@@ -280,7 +281,10 @@ func (s *Server) fetchPrincipal(ctx context.Context, user, pat string) (cachedPr
 	key := hash(pat)
 	now := time.Now()
 	status, b, e := s.request(ctx, "POST", s.Config.AuthURL+"/api/auth/tokens/introspect", "", "", map[string]string{"token": pat})
-	if e != nil || status != 200 {
+	if e != nil || status >= 500 {
+		return cachedPrincipal{}, errUpstreamUnavailable
+	}
+	if status != 200 {
 		return cachedPrincipal{}, auth.ErrInvalidToken
 	}
 	var p struct {

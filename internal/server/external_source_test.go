@@ -4,15 +4,11 @@ import (
 	"testing"
 )
 
-func TestRequestedBusinessScopesRejectsImportSubmit(t *testing.T) {
-	// No silent drop / no alias: retired catalog.import.submit is invalid_scope.
-	if _, err := requestedBusinessScopes("openid mcp.read catalog.import.submit catalog.entity.edit"); err == nil {
-		t.Fatal("mixed request containing catalog.import.submit must be invalid_scope")
-	}
+func TestRequestedBusinessScopesNarrowsImportSubmit(t *testing.T) {
 	if _, err := requestedBusinessScopes("catalog.import.submit"); err == nil {
 		t.Fatal("import-only request must be invalid_scope")
 	}
-	got, err := requestedBusinessScopes("openid mcp.read catalog.entity.edit")
+	got, err := requestedBusinessScopes("openid mcp.read catalog.import.submit catalog.entity.edit")
 	if err != nil {
 		t.Fatal(err)
 	}

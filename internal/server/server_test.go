@@ -29,13 +29,14 @@ func TestRequestedBusinessScopes(t *testing.T) {
 	}{
 		{"chatgpt identity additions", "openid email mcp.read catalog.entity.edit", []string{"mcp.read", "catalog.entity.edit"}, false},
 		{"profile and duplicates", "profile mcp.read mcp.read", []string{"mcp.read"}, false},
-		{"unknown permission", "openid mcp.read catalog.superuser", nil, true},
+		{"cached connector superset narrowed to supported", "openid email mcp.read catalog.entity.edit catalog.definitions.manage catalog.import.submit *", []string{"mcp.read", "catalog.entity.edit"}, false},
+		{"unknown permission only", "openid catalog.superuser", nil, true},
 		{"identity only never expands", "openid email profile", nil, true},
-		{"scope is case sensitive", "OPENID mcp.read", nil, true},
+		{"scope is case sensitive", "MCP.READ", nil, true},
 		{"omitted scopes offer minimal consent", "", []string{"mcp.read", "catalog.entity.edit"}, false},
-		{"wildcard cannot be delegated", "mcp.read *", nil, true},
-		{"management cannot be delegated", "mcp.read catalog.definitions.manage", nil, true},
-		{"import submit is rejected (no silent drop / no alias)", "openid mcp.read catalog.import.submit", nil, true},
+		{"wildcard only cannot be delegated", "*", nil, true},
+		{"management only cannot be delegated", "catalog.definitions.manage", nil, true},
+		{"import submit only is rejected", "openid catalog.import.submit", nil, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := requestedBusinessScopes(tc.raw)

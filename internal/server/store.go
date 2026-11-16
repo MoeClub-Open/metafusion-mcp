@@ -172,6 +172,13 @@ func (s *Store) Access(ctx context.Context, token string) (Grant, error) {
 	}
 	return g, e
 }
+func (s *Store) RefreshTarget(ctx context.Context, client, token string) (Grant, error) {
+	g, e := scanGrant(s.DB.QueryRowContext(ctx, grantSelect+" JOIN mcp.tokens t ON t.grant_id=g.id WHERE t.refresh_hash=$1 AND g.client_id=$2 AND t.revoked_at IS NULL AND t.refresh_expires_at>now() AND g.revoked_at IS NULL", hash(token), client))
+	if errors.Is(e, sql.ErrNoRows) {
+		return Grant{}, ErrInvalidGrant
+	}
+	return g, e
+}
 func (s *Store) Refresh(ctx context.Context, client, token, access, refresh string) (Grant, error) {
 	tx, e := s.DB.BeginTx(ctx, nil)
 	if e != nil {

@@ -366,3 +366,68 @@ func TestPostgresOAuthToRemoteMCP(t *testing.T) {
 		t.Fatal("read-only grant authorized workspace staging", e, res)
 	}
 }
+
+func TestPostgresRefreshChecksUpstreamCredential(t *testing.T) {
+	store := testStore(t)
+	g, code, verifier := testGrant(t, store)
+	g.PATID = "delegation-id"
+	key := make([]byte, 32)
+	g.Cipher, _ = encrypt(key, g.ID, "mfp_refresh_secret")
+	if _, err := store.DB.Exec("UPDATE mcp.grants SET pat_id=$1,pat_cipher=$2 WHERE id=$3", g.PATID, g.Cipher, g.ID); err != nil {
+		t.Fatal(err)
+	}
+	var introspectStatus atomic.Int32
+	introspectStatus.Store(200)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/auth/tokens/introspect" {
+			code := int(introspectStatus.Load())
+			if code == 200 {
+				writeJSON(w, 200, map[string]any{"valid": true, "user_id": g.UserID, "permissions": []string{}})
+				return
+			}
+			writeError(w, code, "introspect_error")
+			return
+		}
+		writeError(w, 404, "not_found")
+	}))
+	defer upstream.Close()
+	cfg := testConfig("https://site.test")
+	cfg.AuthURL = upstream.URL
+	cfg.Key = key
+	s := New(cfg, store)
+	postToken := func(form url.Values) *httptest.ResponseRecorder {
+		req := httptest.NewRequest("POST", "https://site.test/mcp/oauth/token", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rec := httptest.NewRecorder()
+		s.Handler().ServeHTTP(rec, req)
+		return rec
+	}
+	ex := postToken(url.Values{"grant_type": {"authorization_code"}, "client_id": {g.ClientID}, "code": {code}, "redirect_uri": {"http://localhost/cb"}, "code_verifier": {verifier}, "resource": {"https://site.test/mcp"}})
+	if ex.Code != 200 {
+		t.Fatalf("exchange status=%d body=%s", ex.Code, ex.Body.String())
+	}
+	var tok map[string]any
+	_ = json.Unmarshal(ex.Body.Bytes(), &tok)
+	refresh := tok["refresh_token"].(string)
+
+	// Transient 503 must not consume the single-use refresh token.
+	introspectStatus.Store(503)
+	r503 := postToken(url.Values{"grant_type": {"refresh_token"}, "client_id": {g.ClientID}, "refresh_token": {refresh}, "resource": {"https://site.test/mcp"}})
+	if r503.Code != 503 {
+		t.Fatalf("expected 503 on upstream outage, got %d %s", r503.Code, r503.Body.String())
+	}
+
+	// Invalid/expired upstream credential must fail refresh with 400 invalid_grant.
+	introspectStatus.Store(401)
+	r401 := postToken(url.Values{"grant_type": {"refresh_token"}, "client_id": {g.ClientID}, "refresh_token": {refresh}, "resource": {"https://site.test/mcp"}})
+	if r401.Code != 400 || !strings.Contains(r401.Body.String(), "invalid_grant") {
+		t.Fatalf("expected 400 invalid_grant on dead upstream credential, got %d %s", r401.Code, r401.Body.String())
+	}
+
+	// Refresh token still works if upstream recovers (e.g. after 503 or unban).
+	introspectStatus.Store(200)
+	r200 := postToken(url.Values{"grant_type": {"refresh_token"}, "client_id": {g.ClientID}, "refresh_token": {refresh}, "resource": {"https://site.test/mcp"}})
+	if r200.Code != 200 {
+		t.Fatalf("expected 200 after upstream recovery, got %d %s", r200.Code, r200.Body.String())
+	}
+}
