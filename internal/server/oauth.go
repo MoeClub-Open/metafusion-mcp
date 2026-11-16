@@ -78,7 +78,7 @@ func requestedBusinessScopes(raw string) ([]string, error) {
 	requested := strings.Fields(raw)
 	if len(requested) == 0 {
 		// Omitted scope offers a small, explicit consent set. The user may approve
-		// mcp.read alone; other supported business scopes require a new request.
+		// mcp.read alone and later adjust supported scopes in /developer?tab=mcp.
 		return append([]string(nil), defaultScopes...), nil
 	}
 	// Per RFC 6749 §3.3, narrow client-requested scopes (including OIDC identity

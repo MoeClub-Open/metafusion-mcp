@@ -423,6 +423,20 @@ func (s *Server) updateGrant(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_scope")
 		return
 	}
+	scopes := make([]string, 0, len(in.Scopes))
+	for _, scope := range in.Scopes {
+		if !slices.Contains(supportedScopes, scope) {
+			writeError(w, 400, "invalid_scope")
+			return
+		}
+		if !localScope(scope) && !slices.Contains(u.Permissions, "*") && !slices.Contains(u.Permissions, scope) {
+			writeError(w, 403, "scope_not_granted")
+			return
+		}
+		if !slices.Contains(scopes, scope) {
+			scopes = append(scopes, scope)
+		}
+	}
 	items, e := s.Store.Grants(r.Context(), u.ID)
 	if e != nil {
 		writeError(w, 503, "store_unavailable")
@@ -439,21 +453,9 @@ func (s *Server) updateGrant(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 404, "not_found")
 		return
 	}
-	for _, scope := range in.Scopes {
-		if !slices.Contains(supportedScopes, scope) {
-			writeError(w, 400, "invalid_scope")
-			return
-		}
-		if !slices.Contains(g.Scopes, scope) {
-			writeError(w, 400, "scope_expansion_requires_authorization")
-			return
-		}
-	}
-	// Narrow the existing upstream credential before changing the local grant.
-	// A local CAS failure leaves upstream permissions narrower, never broader;
-	// retrying the same narrowing is safe and creates no additional credential.
+	// Update the existing upstream credential in place without minting a new one.
 	permissions := []string{"mcp.connect"}
-	for _, scope := range in.Scopes {
+	for _, scope := range scopes {
 		if !localScope(scope) {
 			permissions = append(permissions, scope)
 		}
@@ -468,8 +470,8 @@ func (s *Server) updateGrant(w http.ResponseWriter, r *http.Request) {
 		delete(s.cache, hash(plain))
 		s.cacheMu.Unlock()
 	}
-	b, _ := json.Marshal(in.Scopes)
-	result, e := s.Store.DB.ExecContext(r.Context(), "WITH changed AS (UPDATE mcp.grants SET scopes=$1 WHERE id=$2 AND user_id=$3 AND revoked_at IS NULL AND scopes=$4::jsonb RETURNING id) INSERT INTO mcp.audit(user_id,grant_id,action) SELECT $3,id,'grant.narrowed' FROM changed", string(b), g.ID, u.ID, mustJSON(g.Scopes))
+	b, _ := json.Marshal(scopes)
+	result, e := s.Store.DB.ExecContext(r.Context(), "WITH changed AS (UPDATE mcp.grants SET scopes=$1 WHERE id=$2 AND user_id=$3 AND revoked_at IS NULL AND scopes=$4::jsonb RETURNING id) INSERT INTO mcp.audit(user_id,grant_id,action) SELECT $3,id,'grant.updated' FROM changed", string(b), g.ID, u.ID, mustJSON(g.Scopes))
 	if e == nil {
 		var n int64
 		n, e = result.RowsAffected()

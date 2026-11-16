@@ -103,7 +103,7 @@
     "errors": {
       "session_required": "请先登录后再管理授权",
       "invalid_scope": "权限选择无效",
-      "scope_expansion_requires_authorization": "增加权限需要重新授权",
+      "scope_not_granted": "当前账号未持有部分所选权限",
       "store_unavailable": "服务暂时不可用，请稍后重试",
       "not_found": "找不到该授权",
       "grant_changed": "授权已变更，请刷新后重试",
@@ -266,7 +266,7 @@
     "errors": {
       "session_required": "Sign in before managing authorizations",
       "invalid_scope": "Invalid permission selection",
-      "scope_expansion_requires_authorization": "Adding permissions requires re-authorization",
+      "scope_not_granted": "Your account does not hold all selected permissions",
       "store_unavailable": "Service temporarily unavailable",
       "not_found": "Authorization not found",
       "grant_changed": "Authorization changed; refresh and try again",
@@ -429,7 +429,7 @@
     "errors": {
       "session_required": "請先登入後再管理授權",
       "invalid_scope": "權限選擇無效",
-      "scope_expansion_requires_authorization": "增加權限需要重新授權",
+      "scope_not_granted": "目前帳號未持有部分所選權限",
       "store_unavailable": "服務暫時無法使用，請稍後再試",
       "not_found": "找不到該授權",
       "grant_changed": "授權已變更，請重新整理後再試",
@@ -592,7 +592,7 @@
     "errors": {
       "session_required": "認可を管理する前にログインしてください",
       "invalid_scope": "権限の選択が無効です",
-      "scope_expansion_requires_authorization": "権限の追加には再認可が必要です",
+      "scope_not_granted": "選択された権限の一部がアカウントに付与されていません",
       "store_unavailable": "サービスを一時的に利用できません",
       "not_found": "認可が見つかりません",
       "grant_changed": "認可が変更されました。更新して再試行してください",

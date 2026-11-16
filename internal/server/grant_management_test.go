@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-func TestPostgresNarrowGrantReusesCredential(t *testing.T) {
+func TestPostgresUpdateGrantReusesCredential(t *testing.T) {
 	store := testStore(t)
 	g, _, _ := testGrant(t, store)
 	g.Scopes = []string{"mcp.read", "catalog.entity.edit"}
@@ -23,6 +23,7 @@ func TestPostgresNarrowGrantReusesCredential(t *testing.T) {
 		t.Fatal(err)
 	}
 	var patches, creations atomic.Int32
+	var lastPatched atomic.Value
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.URL.Path == "/api/auth/me":
@@ -32,9 +33,10 @@ func TestPostgresNarrowGrantReusesCredential(t *testing.T) {
 			var in struct {
 				Scopes []string `json:"scopes"`
 			}
-			if json.NewDecoder(r.Body).Decode(&in) != nil || !reflect.DeepEqual(in.Scopes, []string{"mcp.connect"}) {
-				t.Error("local scopes leaked into the platform credential")
+			if json.NewDecoder(r.Body).Decode(&in) != nil {
+				t.Error("invalid patch payload")
 			}
+			lastPatched.Store(in.Scopes)
 			if r.Header.Get("Authorization") != "" {
 				t.Error("browser session must authorize credential management")
 			}
@@ -54,21 +56,34 @@ func TestPostgresNarrowGrantReusesCredential(t *testing.T) {
 	request.AddCookie(&http.Cookie{Name: "mf_session", Value: "session"})
 	w := httptest.NewRecorder()
 	s.Handler().ServeHTTP(w, request)
-	if w.Code != 200 || patches.Load() != 1 || creations.Load() != 0 {
+	if w.Code != 200 || patches.Load() != 1 || creations.Load() != 0 || !reflect.DeepEqual(lastPatched.Load(), []string{"mcp.connect"}) {
 		t.Fatalf("narrow status=%d patches=%d creations=%d body=%s", w.Code, patches.Load(), creations.Load(), w.Body.String())
 	}
 	items, err := store.Grants(context.Background(), g.UserID)
 	if err != nil || len(items) != 1 || items[0].PATID != g.PATID || !reflect.DeepEqual(items[0].Cipher, g.Cipher) || !reflect.DeepEqual(items[0].Scopes, []string{"mcp.read"}) {
 		t.Fatalf("narrowing replaced credential or lost grant: %v", err)
 	}
-	request = httptest.NewRequest("PATCH", upstream.URL+"/mcp/manage/api/grants/"+g.ID, strings.NewReader(`{"scopes":["mcp.read","catalog.entity.edit"]}`))
+	request = httptest.NewRequest("PATCH", upstream.URL+"/mcp/manage/api/grants/"+g.ID, strings.NewReader(`{"scopes":["mcp.read","mcp.web.write","catalog.entity.edit","mcp.read"]}`))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Origin", upstream.URL)
 	request.AddCookie(&http.Cookie{Name: "mf_session", Value: "session"})
 	w = httptest.NewRecorder()
 	s.Handler().ServeHTTP(w, request)
-	if w.Code != 400 || patches.Load() != 1 {
-		t.Fatalf("scope expansion reached upstream: %d %s", w.Code, w.Body.String())
+	if w.Code != 200 || patches.Load() != 2 || creations.Load() != 0 || !reflect.DeepEqual(lastPatched.Load(), []string{"mcp.connect", "catalog.entity.edit"}) {
+		t.Fatalf("expand status=%d patches=%d creations=%d body=%s", w.Code, patches.Load(), creations.Load(), w.Body.String())
+	}
+	items, err = store.Grants(context.Background(), g.UserID)
+	if err != nil || len(items) != 1 || items[0].PATID != g.PATID || !reflect.DeepEqual(items[0].Cipher, g.Cipher) || !reflect.DeepEqual(items[0].Scopes, []string{"mcp.read", "mcp.web.write", "catalog.entity.edit"}) {
+		t.Fatalf("expanding replaced credential or lost grant: %v %+v", err, items)
+	}
+	request = httptest.NewRequest("PATCH", upstream.URL+"/mcp/manage/api/grants/"+g.ID, strings.NewReader(`{"scopes":["mcp.read","community.post.moderate"]}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Origin", upstream.URL)
+	request.AddCookie(&http.Cookie{Name: "mf_session", Value: "session"})
+	w = httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, request)
+	if w.Code != 403 || patches.Load() != 2 {
+		t.Fatalf("unheld scope reached upstream: %d %s", w.Code, w.Body.String())
 	}
 }
 
