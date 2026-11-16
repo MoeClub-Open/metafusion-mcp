@@ -21,7 +21,7 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
 	_, _ = w.Write(b)
 }
 func (s *Server) asset(w http.ResponseWriter, r *http.Request) {
@@ -41,7 +41,11 @@ func (s *Server) asset(w http.ResponseWriter, r *http.Request) {
 	case strings.HasSuffix(name, ".css"):
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
 	case strings.HasSuffix(name, ".json"):
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	case strings.HasSuffix(name, ".svg"):
+		w.Header().Set("Content-Type", "image/svg+xml")
+	case strings.HasSuffix(name, ".woff2"):
+		w.Header().Set("Content-Type", "font/woff2")
 	default:
 		writeError(w, 404, "not_found")
 		return

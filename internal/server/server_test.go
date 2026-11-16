@@ -306,6 +306,23 @@ func TestProxyPublicOriginAssets(t *testing.T) {
 	if w.Code != 200 || !strings.Contains(w.Header().Get("Content-Type"), "javascript") {
 		t.Fatalf("asset with proxy Origin status=%d type=%q body=%q", w.Code, w.Header().Get("Content-Type"), w.Body.String())
 	}
+	for _, tc := range []struct {
+		name, wantType string
+	}{
+		{"theme-boot.js", "javascript"},
+		{"theme.css", "text/css"},
+		{"catalog.svg", "image/svg+xml"},
+		{"instrument-serif-latin-400-normal.woff2", "font/woff2"},
+	} {
+		ar := httptest.NewRequest("GET", "http://mf-test.example/mcp/assets/"+tc.name, nil)
+		ar.Host = "mf-test.example"
+		ar.Header.Set("X-Forwarded-Proto", "https")
+		aw := httptest.NewRecorder()
+		h.ServeHTTP(aw, ar)
+		if aw.Code != 200 || !strings.Contains(aw.Header().Get("Content-Type"), tc.wantType) {
+			t.Fatalf("asset %s status=%d type=%q", tc.name, aw.Code, aw.Header().Get("Content-Type"))
+		}
+	}
 	evil := httptest.NewRequest("GET", "http://mf-test.example/mcp/assets/app.js", nil)
 	evil.Host = "mf-test.example"
 	evil.Header.Set("X-Forwarded-Proto", "https")

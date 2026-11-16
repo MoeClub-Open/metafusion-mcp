@@ -1,10 +1,11 @@
 <!doctype html>
-<html lang="zh-CN" data-theme-mode="dark" data-theme-accent="blue" data-theme-tone="neutral" class="dark">
+<html lang="zh-CN" data-theme-mode="dark" data-theme-accent="everforest" data-theme-tone="neutral" data-theme-pattern="catalog" class="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#0b0f17">
+  <meta name="theme-color" content="#2d353b">
   <title>MetaFusion MCP</title>
+  <script src="/mcp/assets/theme-boot.js"></script>
   <link rel="stylesheet" href="/mcp/assets/theme.css">
   <link rel="stylesheet" href="/mcp/assets/style.css">
   <script type="module" src="/mcp/assets/app.js"></script>
@@ -12,73 +13,226 @@
 <body>
   <header class="site-header">
     <div class="site-header-inner">
-      <a href="/" class="brand" aria-label="MetaFusion">
-        <svg class="brand-mark" width="28" height="28" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-          <path d="M9 2H23L30 9V23L23 30H9L2 23V9L9 2Z" fill="none" stroke="currentColor" stroke-opacity="0.16" stroke-width="1.05"/>
-          <path d="M10.85 21.55L13.28 9.85L16 16.35L18.72 9.85L21.15 21.55" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        <span>MetaFusion</span>
-      </a>
-      <nav class="site-nav" aria-label="Primary">
-        <a href="/home" data-i18n="navHome"></a>
-        <a href="/docs/api-mcp" data-i18n="docs"></a>
-        <a href="/mcp/manage" data-i18n="navManage"></a>
-      </nav>
+      <div class="header-left">
+        <a href="/" class="brand" aria-label="MetaFusion">
+          <span class="brand-mark-wrap" aria-hidden="true">
+            <svg class="brand-mark" width="26" height="26" viewBox="0 0 32 32" fill="none">
+              <defs>
+                <linearGradient id="mf-frame-mcp" x1="2" y1="2" x2="30" y2="30" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="currentColor" stop-opacity="0.16"/>
+                  <stop offset="1" stop-color="currentColor" stop-opacity="0.04"/>
+                </linearGradient>
+              </defs>
+              <path d="M9 2H23L30 9V23L23 30H9L2 23V9L9 2Z" fill="none" stroke="url(#mf-frame-mcp)" stroke-width="1.05"/>
+              <path d="M10.2 3.6H21.8L28.4 10.2V21.8L21.8 28.4H10.2L3.6 21.8V10.2L10.2 3.6Z" fill="none" stroke="currentColor" stroke-opacity="0.06" stroke-width="0.65"/>
+              <path d="M7.2 7.6V4.6H10.2" stroke="currentColor" stroke-opacity="0.18" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M21.8 4.6H24.8V7.6" stroke="currentColor" stroke-opacity="0.18" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M24.8 24.4V27.4H21.8" stroke="currentColor" stroke-opacity="0.18" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M10.2 27.4H7.2V24.4" stroke="currentColor" stroke-opacity="0.18" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/>
+              <ellipse cx="16" cy="16" rx="10.4" ry="6.15" fill="none" stroke="currentColor" stroke-opacity="0.10" stroke-width="0.65" stroke-dasharray="1.15 1.7" stroke-linecap="round"/>
+              <ellipse cx="16" cy="16" rx="10.4" ry="6.15" fill="none" stroke="currentColor" stroke-opacity="0.04" stroke-width="1.6"/>
+              <path d="M10.85 21.55L13.28 9.85L16 16.35L18.72 9.85L21.15 21.55" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M12.95 17.55L14.05 12.55" stroke="currentColor" stroke-opacity="0.38" stroke-width="0.75" stroke-linecap="round"/>
+              <path d="M19.05 17.55L17.95 12.55" stroke="currentColor" stroke-opacity="0.38" stroke-width="0.75" stroke-linecap="round"/>
+              <g opacity="0.98">
+                <line x1="11.2" y1="15.42" x2="20.8" y2="15.42" stroke="var(--primary-color, #a7c080)" stroke-width="1.05" stroke-linecap="round"/>
+                <circle cx="11.2" cy="15.42" r="0.95" fill="var(--primary-color, #a7c080)" opacity="0.95"/>
+                <circle cx="20.8" cy="15.42" r="0.95" fill="var(--primary-color, #a7c080)" opacity="0.95"/>
+              </g>
+              <g>
+                <rect x="14.78" y="14.2" width="2.44" height="2.44" transform="rotate(45 16 15.42)" fill="var(--primary-color, #a7c080)" stroke="white" stroke-opacity="0.88" stroke-width="0.45"/>
+                <rect x="15.42" y="14.84" width="1.16" height="1.16" transform="rotate(45 16 15.42)" fill="white" opacity="0.96"/>
+              </g>
+              <g opacity="0.32">
+                <rect x="10.1" y="23.2" width="1.15" height="1.15" rx="0.2" fill="currentColor" fill-opacity="0.45"/>
+                <rect x="15.02" y="23.2" width="1.96" height="1.15" rx="0.2" fill="currentColor" fill-opacity="0.20"/>
+                <rect x="20.75" y="23.2" width="1.15" height="1.15" rx="0.2" fill="var(--primary-color, #a7c080)"/>
+              </g>
+            </svg>
+          </span>
+          <span class="brand-wordmark">
+            <span class="brand-title">MetaFusion</span>
+            <span class="brand-sub">CATALOG</span>
+          </span>
+        </a>
+
+        <nav class="site-nav" aria-label="Primary">
+          <a href="/home" class="nav-link">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/></svg>
+            <span data-i18n="navHome"></span>
+          </a>
+          <a href="/docs/api-mcp" class="nav-link">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>
+            <span data-i18n="docs"></span>
+          </a>
+          <a href="/mcp/manage" class="nav-link">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg>
+            <span data-i18n="navManage"></span>
+          </a>
+        </nav>
+      </div>
+
       <div class="site-tools">
-        <div class="theme-controls" role="group" aria-label="Theme">
-          <button type="button" id="themeMode" class="icon-btn" title="Theme mode" aria-label="Theme mode">◐</button>
-          <select id="themeAccent" aria-label="Accent color"></select>
+        <a href="/developer?tab=mcp" id="headerUser" class="user-pill" hidden>
+          <span id="headerAvatar" class="user-avatar" aria-hidden="true"></span>
+          <span id="headerUsername" class="user-name"></span>
+        </a>
+        <span class="tools-divider" aria-hidden="true"></span>
+
+        <div class="popover-wrap" id="localeWrap">
+          <button type="button" id="localeBtn" class="icon-btn" aria-haspopup="dialog" aria-expanded="false">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>
+          </button>
+          <div id="localePopover" class="popover popover-locale" role="dialog" hidden>
+            <div class="popover-locale-head" data-i18n-meta="localeChoice"></div>
+            <div id="localeList" class="locale-list"></div>
+          </div>
         </div>
-        <select id="language" aria-label="Language">
-          <option value="zh-CN">简体中文</option>
-          <option value="en-US">English</option>
-          <option value="zh-TW">繁體中文</option>
-          <option value="ja-JP">日本語</option>
-        </select>
+
+        <div class="popover-wrap" id="modeWrap">
+          <button type="button" id="themeMode" class="icon-btn icon-btn-primary" aria-haspopup="dialog" aria-expanded="false"></button>
+          <div id="modePopover" class="popover popover-theme" role="dialog" hidden>
+            <div class="popover-head">
+              <span class="popover-title" id="modePopoverTitle"></span>
+              <button type="button" class="popover-close" data-close-popover aria-label="Close">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              </button>
+            </div>
+            <div id="modeGrid" class="mode-grid" role="group"></div>
+          </div>
+        </div>
+
+        <div class="popover-wrap" id="paletteWrap">
+          <button type="button" id="paletteBtn" class="icon-btn icon-btn-primary" aria-haspopup="dialog" aria-expanded="false">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
+          </button>
+          <div id="palettePopover" class="popover popover-theme" role="dialog" hidden>
+            <div class="popover-head">
+              <span class="popover-title">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="text-primary" aria-hidden="true"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
+                <span data-i18n-meta="palette"></span>
+              </span>
+              <button type="button" class="popover-close" data-close-popover aria-label="Close">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              </button>
+            </div>
+            <div class="palette-section">
+              <div class="palette-label-row">
+                <span data-i18n-meta="accentLabel"></span>
+                <strong id="accentCurrent"></strong>
+              </div>
+              <div id="accentGrid" class="accent-grid"></div>
+            </div>
+            <div class="palette-section">
+              <div class="palette-label-row">
+                <span data-i18n-meta="toneLabel"></span>
+                <strong id="toneCurrent"></strong>
+              </div>
+              <div id="toneGrid" class="tone-grid"></div>
+            </div>
+            <div class="palette-section">
+              <div class="palette-label-row">
+                <span data-i18n-meta="patternLabel"></span>
+                <strong id="patternCurrent"></strong>
+              </div>
+              <div id="patternGrid" class="pattern-grid"></div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </header>
 
-  <main>
-    <section id="manageShell" class="panel" hidden>
-      <h1 data-i18n="manageTitle"></h1>
-      <p data-i18n="manageIntro"></p>
-      <div id="notice" role="status" aria-live="polite"></div>
-      <div id="sessionBanner" class="banner" hidden>
-        <p id="sessionMessage"></p>
-        <a id="login" class="button" data-i18n="login"></a>
-        <details id="errorDetails" class="error-details" hidden>
-          <summary data-i18n="errorDetails"></summary>
-          <code id="errorCode"></code>
-        </details>
+  <main class="page-main">
+    <section id="manageShell" class="consent-card" hidden>
+      <div class="card-head">
+        <span class="head-icon" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
+        </span>
+        <div class="head-copy">
+          <h1 data-i18n="manageTitle"></h1>
+          <p data-i18n="manageIntro"></p>
+        </div>
       </div>
-      <section id="workspace" hidden>
-        <p id="identity" class="meta"></p>
-        <label data-i18n="endpoint"></label>
-        <code id="endpoint"></code>
-        <section id="consent" hidden>
-          <h2 data-i18n="authorization"></h2>
-          <p id="client"></p>
-          <p class="warning" data-i18n="unverified"></p>
-          <p id="callback" class="meta"></p>
-          <div class="select-all-bar">
-            <label class="select-all">
-              <input type="checkbox" id="selectAllScopes">
-              <span data-i18n="selectAll"></span>
-            </label>
+
+      <div class="card-body">
+        <div id="notice" class="notice-bar" role="status" aria-live="polite" hidden></div>
+
+        <div id="sessionBanner" class="login-prompt" hidden>
+          <div class="prompt-main">
+            <span class="prompt-icon" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" x2="3" y1="12" y2="12"/></svg>
+            </span>
+            <div class="prompt-copy">
+              <p id="sessionMessage" class="prompt-title"></p>
+              <details id="errorDetails" class="error-details" hidden>
+                <summary data-i18n="errorDetails"></summary>
+                <code id="errorCode"></code>
+              </details>
+            </div>
           </div>
-          <div id="scopes" class="scope-groups"></div>
-          <div class="buttons">
-            <button id="approve" data-i18n="approve"></button>
-            <button id="deny" class="secondary" data-i18n="deny"></button>
-          </div>
+          <a id="login" class="btn btn-primary" hidden>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" x2="3" y1="12" y2="12"/></svg>
+            <span data-i18n="login"></span>
+          </a>
+        </div>
+
+        <section id="workspace" hidden>
+          <dl class="context-grid">
+            <div class="context-row" id="clientRow" hidden>
+              <dt data-i18n="authorization"></dt>
+              <dd class="client-dd">
+                <strong id="clientName" class="client-name"></strong>
+                <code id="clientId" class="inline-chip"></code>
+              </dd>
+            </div>
+            <div class="context-row" id="callbackRow" hidden>
+              <dt data-i18n="callback"></dt>
+              <dd id="callback" class="mono-dd"></dd>
+            </div>
+            <div class="context-row">
+              <dt data-i18n="signedIn"></dt>
+              <dd id="identity" class="account-dd"></dd>
+            </div>
+            <div class="context-row">
+              <dt data-i18n="endpoint"></dt>
+              <dd class="endpoint-dd">
+                <code id="endpoint" class="mono-text"></code>
+                <button type="button" id="copyEndpoint" class="copy-btn"></button>
+              </dd>
+            </div>
+          </dl>
+
+          <section id="consent" class="consent-section" hidden>
+            <div class="unverified-bar">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" class="unverified-icon" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+              <span data-i18n="unverified"></span>
+            </div>
+
+            <div class="scopes-toolbar">
+              <label class="select-all">
+                <input type="checkbox" id="selectAllScopes">
+                <span data-i18n="selectAll"></span>
+              </label>
+              <div class="toolbar-right">
+                <span id="selectedSummary" class="count-badge"></span>
+                <button type="button" id="toggleExpand" class="link-btn"></button>
+              </div>
+            </div>
+
+            <div id="scopes" class="scope-groups"></div>
+
+            <div class="consent-footer">
+              <span id="grantHint" class="grant-hint"></span>
+              <div class="buttons">
+                <button type="button" id="deny" class="btn btn-secondary" data-i18n="deny"></button>
+                <button type="button" id="approve" class="btn btn-primary" data-i18n="approve"></button>
+              </div>
+            </div>
+          </section>
         </section>
-      </section>
+      </div>
     </section>
   </main>
-
-  <footer class="site-footer">
-    <a href="/docs/api-mcp" data-i18n="docs"></a>
-  </footer>
 </body>
 </html>

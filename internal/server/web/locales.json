@@ -15,6 +15,13 @@
     "signedIn": "当前账号",
     "callback": "回调地址",
     "copied": "已保存",
+    "copyEndpoint": "复制端点地址",
+    "copiedEndpoint": "已复制",
+    "selectedCount": "已选 {checked} / {total}",
+    "grantSummary": "将授予 {count} 项权限",
+    "selectAtLeastOne": "请至少勾选 1 项权限",
+    "expandAll": "展开详情",
+    "collapseAll": "收起详情",
     "selectGroup": "全选本组",
     "clearGroup": "清空本组",
     "status": {
@@ -114,22 +121,45 @@
       "system": "跟随系统"
     },
     "accents": {
+      "everforest": "森绿",
       "blue": "蓝色",
-      "sky": "天空",
+      "sky": "天蓝",
       "cyan": "青色",
-      "teal": "青绿",
-      "emerald": "翠绿",
-      "lime": "黄绿",
+      "teal": "蓝绿",
+      "emerald": "翡翠绿",
+      "lime": "青柠",
       "amber": "琥珀",
       "orange": "橙色",
-      "red": "红色",
-      "rose": "玫红",
-      "fuchsia": "紫红",
+      "red": "猩红",
+      "rose": "玫瑰",
+      "fuchsia": "品红",
       "purple": "紫色",
       "violet": "紫罗兰",
       "indigo": "靛蓝",
-      "slate": "石板",
+      "slate": "石板灰",
       "monochrome": "单色"
+    },
+    "themeMeta": {
+      "displayMode": "显示模式",
+      "modeControl": "显示模式：{mode}",
+      "palette": "调色板",
+      "accentLabel": "主题强调色",
+      "toneLabel": "背景与表面色调",
+      "patternLabel": "背景图案",
+      "close": "关闭",
+      "localeSwitch": "语言切换",
+      "localeChoice": "语言选择"
+    },
+    "tones": {
+      "neutral": "森林",
+      "cool": "冷灰",
+      "warm": "暖灰",
+      "deep": "深色"
+    },
+    "patterns": {
+      "catalog": "索引线",
+      "dots": "点阵",
+      "none": "纯色"
     }
   },
   "en-US": {
@@ -148,6 +178,13 @@
     "signedIn": "Signed in as",
     "callback": "Callback address",
     "copied": "Saved",
+    "copyEndpoint": "Copy endpoint URL",
+    "copiedEndpoint": "Copied",
+    "selectedCount": "{checked} / {total} selected",
+    "grantSummary": "Granting {count} permission(s)",
+    "selectAtLeastOne": "Select at least 1 permission",
+    "expandAll": "Expand all",
+    "collapseAll": "Collapse all",
     "selectGroup": "Select all in group",
     "clearGroup": "Clear group",
     "status": {
@@ -247,6 +284,7 @@
       "system": "System"
     },
     "accents": {
+      "everforest": "Everforest",
       "blue": "Blue",
       "sky": "Sky",
       "cyan": "Cyan",
@@ -263,6 +301,28 @@
       "indigo": "Indigo",
       "slate": "Slate",
       "monochrome": "Monochrome"
+    },
+    "themeMeta": {
+      "displayMode": "Display mode",
+      "modeControl": "Display mode: {mode}",
+      "palette": "Palette",
+      "accentLabel": "Accent color",
+      "toneLabel": "Background and surface tone",
+      "patternLabel": "Background pattern",
+      "close": "Close",
+      "localeSwitch": "Switch language",
+      "localeChoice": "Language"
+    },
+    "tones": {
+      "neutral": "Forest",
+      "cool": "Cool",
+      "warm": "Warm",
+      "deep": "Deep"
+    },
+    "patterns": {
+      "catalog": "Index lines",
+      "dots": "Dots",
+      "none": "Solid"
     }
   },
   "zh-TW": {
@@ -281,6 +341,13 @@
     "signedIn": "目前帳號",
     "callback": "回呼位址",
     "copied": "已儲存",
+    "copyEndpoint": "複製端點位址",
+    "copiedEndpoint": "已複製",
+    "selectedCount": "已選 {checked} / {total}",
+    "grantSummary": "將授予 {count} 項權限",
+    "selectAtLeastOne": "請至少勾選 1 項權限",
+    "expandAll": "展開詳情",
+    "collapseAll": "收合詳情",
     "selectGroup": "全選本組",
     "clearGroup": "清空本組",
     "status": {
@@ -380,22 +447,45 @@
       "system": "跟隨系統"
     },
     "accents": {
+      "everforest": "森綠",
       "blue": "藍色",
-      "sky": "天空",
+      "sky": "天藍",
       "cyan": "青色",
-      "teal": "青綠",
-      "emerald": "翠綠",
-      "lime": "黃綠",
+      "teal": "藍綠",
+      "emerald": "翡翠綠",
+      "lime": "青檸",
       "amber": "琥珀",
       "orange": "橙色",
-      "red": "紅色",
-      "rose": "玫紅",
-      "fuchsia": "紫紅",
+      "red": "猩紅",
+      "rose": "玫瑰",
+      "fuchsia": "品紅",
       "purple": "紫色",
       "violet": "紫羅蘭",
       "indigo": "靛藍",
-      "slate": "石板",
+      "slate": "石板灰",
       "monochrome": "單色"
+    },
+    "themeMeta": {
+      "displayMode": "顯示模式",
+      "modeControl": "顯示模式：{mode}",
+      "palette": "調色盤",
+      "accentLabel": "主題強調色",
+      "toneLabel": "背景與表面色調",
+      "patternLabel": "背景圖案",
+      "close": "關閉",
+      "localeSwitch": "切換語言",
+      "localeChoice": "語言"
+    },
+    "tones": {
+      "neutral": "森林",
+      "cool": "冷灰",
+      "warm": "暖灰",
+      "deep": "深色"
+    },
+    "patterns": {
+      "catalog": "索引線",
+      "dots": "點陣",
+      "none": "純色"
     }
   },
   "ja-JP": {
@@ -414,6 +504,13 @@
     "signedIn": "ログイン中のアカウント",
     "callback": "コールバック先",
     "copied": "保存しました",
+    "copyEndpoint": "エンドポイントをコピー",
+    "copiedEndpoint": "コピーしました",
+    "selectedCount": "{checked} / {total} 件選択中",
+    "grantSummary": "{count} 件の権限を付与します",
+    "selectAtLeastOne": "少なくとも 1 件の権限を選択してください",
+    "expandAll": "詳細を展開",
+    "collapseAll": "詳細を折りたたむ",
     "selectGroup": "グループを全選択",
     "clearGroup": "グループをクリア",
     "status": {
@@ -510,9 +607,10 @@
     "themeMode": {
       "dark": "ダーク",
       "light": "ライト",
-      "system": "システム"
+      "system": "システムに合わせる"
     },
     "accents": {
+      "everforest": "エバーフォレスト",
       "blue": "ブルー",
       "sky": "スカイ",
       "cyan": "シアン",
@@ -525,10 +623,32 @@
       "rose": "ローズ",
       "fuchsia": "フクシア",
       "purple": "パープル",
-      "violet": "バイオレット",
+      "violet": "ヴァイオレット",
       "indigo": "インディゴ",
       "slate": "スレート",
       "monochrome": "モノクロ"
+    },
+    "themeMeta": {
+      "displayMode": "表示モード",
+      "modeControl": "表示モード: {mode}",
+      "palette": "カラーパレット",
+      "accentLabel": "テーマのアクセントカラー",
+      "toneLabel": "背景とサーフェスの色調",
+      "patternLabel": "背景パターン",
+      "close": "閉じる",
+      "localeSwitch": "言語を切り替える",
+      "localeChoice": "言語"
+    },
+    "tones": {
+      "neutral": "フォレスト",
+      "cool": "クール",
+      "warm": "ウォーム",
+      "deep": "ディープ"
+    },
+    "patterns": {
+      "catalog": "インデックス線",
+      "dots": "ドット",
+      "none": "単色"
     }
   }
 }
