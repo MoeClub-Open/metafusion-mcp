@@ -577,13 +577,9 @@ func (s *Server) contract(ctx context.Context, args json.RawMessage) *mcp.CallTo
 	if len(args) > 0 && json.Unmarshal(args, &in) != nil {
 		return expectedError(400, "invalid_tool_arguments", "arguments must be an object", nil, nil)
 	}
-	status, b, e := s.request(ctx, "GET", s.Config.APIURL+"/api/openapi.json", "", "", nil)
-	if e != nil || status != 200 {
-		return toolError("contract_unavailable")
-	}
-	var doc map[string]any
-	if json.Unmarshal(b, &doc) != nil {
-		return toolError("invalid_contract")
+	doc, errCode := s.cachedContractDoc(ctx)
+	if errCode != "" {
+		return toolError(errCode)
 	}
 	docs := map[string]string{"community": s.Config.PublicURL + "/docs/api-community", "storage": s.Config.PublicURL + "/docs/api-storage", "authentication": s.Config.PublicURL + "/docs/api-auth", "commits": s.Config.PublicURL + "/docs/api-commits"}
 	components, _ := doc["components"].(map[string]any)
@@ -612,6 +608,59 @@ func (s *Server) contract(ctx context.Context, args json.RawMessage) *mcp.CallTo
 		limit = *in.SummaryChars
 	}
 	return result(map[string]any{"ok": true, "mode": "summary", "info": doc["info"], "operations": contractIndex(doc, limit), "schema_names": sortedKeys(schemas), "hint": "Call again with path (+method) for one operation and its schemas, or mode=full for the whole OpenAPI.", "documentation": docs}, false)
+}
+
+const contractCacheTTL = 60 * time.Second
+
+type contractErr string
+
+func (e contractErr) Error() string { return string(e) }
+
+func (s *Server) cachedContractDoc(ctx context.Context) (map[string]any, string) {
+	key := s.Config.APIURL
+	now := time.Now()
+	s.contractMu.Lock()
+	if entry, ok := s.contractCache[key]; ok && now.Before(entry.Until) {
+		s.contractMu.Unlock()
+		return entry.Doc, ""
+	}
+	s.contractMu.Unlock()
+
+	ch := s.flight.DoChan("contract:"+key, func() (any, error) {
+		s.contractMu.Lock()
+		if entry, ok := s.contractCache[key]; ok && time.Now().Before(entry.Until) {
+			s.contractMu.Unlock()
+			return entry.Doc, nil
+		}
+		s.contractMu.Unlock()
+
+		fctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 45*time.Second)
+		defer cancel()
+		status, b, e := s.request(fctx, "GET", key+"/api/openapi.json", "", "", nil)
+		if e != nil || status != 200 {
+			return nil, contractErr("contract_unavailable")
+		}
+		var doc map[string]any
+		if json.Unmarshal(b, &doc) != nil {
+			return nil, contractErr("invalid_contract")
+		}
+		s.contractMu.Lock()
+		if s.contractCache == nil {
+			s.contractCache = map[string]cachedContract{}
+		}
+		s.contractCache[key] = cachedContract{Doc: doc, Until: time.Now().Add(contractCacheTTL)}
+		s.contractMu.Unlock()
+		return doc, nil
+	})
+	select {
+	case <-ctx.Done():
+		return nil, "contract_unavailable"
+	case res := <-ch:
+		if res.Err != nil {
+			return nil, res.Err.Error()
+		}
+		return res.Val.(map[string]any), ""
+	}
 }
 
 func sortedKeys(m map[string]any) []string {

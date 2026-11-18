@@ -1,13 +1,16 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -221,5 +224,79 @@ func TestContractModes(t *testing.T) {
 	}
 	if m = structured(t, s.contract(ctx, json.RawMessage(`{"path":"/api/nope"}`))); m["status"] != float64(404) {
 		t.Fatal("missing op", m)
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func TestContractCacheAndSingleflight(t *testing.T) {
+	var hits atomic.Int32
+	doc := map[string]any{
+		"info":  map[string]any{"title": "c"},
+		"paths": map[string]any{"/catalog/entities": map[string]any{"get": map[string]any{"summary": "List"}}},
+		"components": map[string]any{"schemas": map[string]any{}},
+	}
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		time.Sleep(30 * time.Millisecond)
+		writeJSON(w, 200, doc)
+	}))
+	defer up.Close()
+	s := New(testConfig(up.URL), nil)
+	ctx := principalContext(Principal{PAT: "mfp_x", Grant: Grant{UserID: "u", Scopes: []string{"mcp.read"}}})
+	var wg sync.WaitGroup
+	for i := 0; i < 6; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			m := structured(t, s.contract(ctx, nil))
+			if m["mode"] != "summary" {
+				t.Errorf("unexpected mode: %v", m)
+			}
+		}()
+	}
+	wg.Wait()
+	m := structured(t, s.contract(ctx, json.RawMessage(`{"mode":"full"}`)))
+	if m["catalog"] == nil {
+		t.Fatalf("expected full catalog")
+	}
+	if got := hits.Load(); got != 1 {
+		t.Fatalf("expected 1 upstream openapi fetch via singleflight+cache, got %d", got)
+	}
+}
+
+func TestReferenceCacheAndSingleflight(t *testing.T) {
+	var hits atomic.Int32
+	cfg := testConfig("http://127.0.0.1")
+	cfg.SkillsRevision = "0123456789abcdef0123456789abcdef01234567"
+	s := New(cfg, nil)
+	s.HTTP = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		hits.Add(1)
+		time.Sleep(30 * time.Millisecond)
+		return &http.Response{
+			StatusCode: 200,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(bytes.NewBufferString("# Curator Skill")),
+		}, nil
+	})}
+	var wg sync.WaitGroup
+	for i := 0; i < 6; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			txt, rev, err := s.reference(t.Context(), "skills", "skills/metafusion-curator/SKILL.md")
+			if err != nil || txt != "# Curator Skill" || rev != cfg.SkillsRevision {
+				t.Errorf("bad reference result: %q %q %v", txt, rev, err)
+			}
+		}()
+	}
+	wg.Wait()
+	if _, _, err := s.reference(t.Context(), "skills", "skills/metafusion-curator/SKILL.md"); err != nil {
+		t.Fatal(err)
+	}
+	if got := hits.Load(); got != 1 {
+		t.Fatalf("expected 1 upstream reference fetch via singleflight+cache, got %d", got)
 	}
 }

@@ -28,11 +28,19 @@ type Server struct {
 	MCP     *mcp.Server
 	cacheMu sync.Mutex
 	cache   map[string]cachedPrincipal
+	contractMu    sync.Mutex
+	contractCache map[string]cachedContract
+	refMu         sync.Mutex
+	refCache      map[string]string
 	limiter *limiter
 	flight  singleflight.Group
 	Files   chan struct{}
 	// Log receives one structured record per upstream API call (JSON to stdout by default).
 	Log *slog.Logger
+}
+type cachedContract struct {
+	Doc   map[string]any
+	Until time.Time
 }
 type cachedPrincipal struct {
 	Permissions []string
@@ -64,7 +72,7 @@ func localScope(scope string) bool { return scope == "mcp.read" || scope == "mcp
 var defaultScopes = []string{"mcp.read", "catalog.entity.edit"}
 
 func New(c Config, store *Store) *Server {
-	s := &Server{Config: c, Store: store, HTTP: &http.Client{Timeout: 30 * time.Second, Transport: &http.Transport{MaxIdleConns: 1024, MaxIdleConnsPerHost: 256, IdleConnTimeout: 90 * time.Second, TLSHandshakeTimeout: 5 * time.Second, ResponseHeaderTimeout: 30 * time.Second}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, cache: map[string]cachedPrincipal{}, limiter: newLimiter()}
+	s := &Server{Config: c, Store: store, HTTP: &http.Client{Timeout: 45 * time.Second, Transport: &http.Transport{MaxIdleConns: 1024, MaxIdleConnsPerHost: 256, IdleConnTimeout: 90 * time.Second, TLSHandshakeTimeout: 5 * time.Second, ResponseHeaderTimeout: 45 * time.Second}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, cache: map[string]cachedPrincipal{}, contractCache: map[string]cachedContract{}, refCache: map[string]string{}, limiter: newLimiter()}
 	s.WebHTTP = publicClient()
 	// Fresh connections prevent net/http's implicit replay on a stale pooled connection,
 	// including POSTs with an explicit Idempotency-Key header.

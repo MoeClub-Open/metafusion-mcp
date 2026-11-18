@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"time"
 )
 
 var referencePath = regexp.MustCompile(`^(skills/[a-z0-9-]+/(SKILL\.md|references/[a-z0-9-]+\.md)|docs/[a-z0-9-]+\.md)$`)
@@ -44,12 +45,47 @@ func (s *Server) reference(ctx context.Context, source, p string) (string, strin
 	if (source != "skills" && source != "docs") || !strings.HasPrefix(p, source+"/") || !referencePath.MatchString(p) || !revisionPattern.MatchString(revision) {
 		return "", "", url.InvalidHostError("invalid reference")
 	}
-	status, b, e := s.request(ctx, "GET", "https://raw.githubusercontent.com/MoeclubM/"+repo+"/"+revision+"/"+p, "", "", nil)
-	if e != nil {
-		return "", "", e
+	key := source + ":" + revision + ":" + p
+	s.refMu.Lock()
+	if cached, ok := s.refCache[key]; ok {
+		s.refMu.Unlock()
+		return cached, revision, nil
 	}
-	if status != 200 {
-		return "", "", url.InvalidHostError("reference unavailable")
+	s.refMu.Unlock()
+
+	ch := s.flight.DoChan("ref:"+key, func() (any, error) {
+		s.refMu.Lock()
+		if cached, ok := s.refCache[key]; ok {
+			s.refMu.Unlock()
+			return cached, nil
+		}
+		s.refMu.Unlock()
+
+		fctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 45*time.Second)
+		defer cancel()
+		status, b, e := s.request(fctx, "GET", "https://raw.githubusercontent.com/MoeclubM/"+repo+"/"+revision+"/"+p, "", "", nil)
+		if e != nil {
+			return "", e
+		}
+		if status != 200 {
+			return "", url.InvalidHostError("reference unavailable")
+		}
+		text := string(b)
+		s.refMu.Lock()
+		if s.refCache == nil {
+			s.refCache = map[string]string{}
+		}
+		s.refCache[key] = text
+		s.refMu.Unlock()
+		return text, nil
+	})
+	select {
+	case <-ctx.Done():
+		return "", "", ctx.Err()
+	case res := <-ch:
+		if res.Err != nil {
+			return "", "", res.Err
+		}
+		return res.Val.(string), revision, nil
 	}
-	return string(b), revision, nil
 }
