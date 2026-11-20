@@ -44,6 +44,51 @@ func TestUserReadWriteBudgetsAndAdmin(t *testing.T) {
 	}
 }
 
+func TestConfigurableHighConcurrencyRateLimitsAndFileSlots(t *testing.T) {
+	l := newLimiterWithConfig(RateLimitConfig{Configured: true, ReadRPM: 0, WriteRPM: 5, OAuthRPM: 3})
+	p := Principal{Grant: Grant{UserID: "burst-user"}}
+	for i := 0; i < 1000; i++ {
+		if !l.AllowAPI(p, "GET", "/api/catalog/entities") {
+			t.Fatalf("unlimited read rate limited at %d", i)
+		}
+	}
+	for i := 0; i < 5; i++ {
+		if !l.AllowAPI(p, "POST", "/api/catalog/workspaces") {
+			t.Fatalf("write limited before 5 at %d", i)
+		}
+	}
+	if l.AllowAPI(p, "POST", "/api/catalog/workspaces") {
+		t.Fatal("write exceeded configured limit 5")
+	}
+	for i := 0; i < 3; i++ {
+		r := httptest.NewRequest("POST", "https://example.com/mcp/oauth/register", nil)
+		r.RemoteAddr = "198.51.100.10:1234"
+		if !l.Allow(r) {
+			t.Fatalf("oauth limited before 3 at %d", i)
+		}
+	}
+	r := httptest.NewRequest("POST", "https://example.com/mcp/oauth/register", nil)
+	r.RemoteAddr = "198.51.100.10:1234"
+	if l.Allow(r) {
+		t.Fatal("oauth exceeded configured limit 3")
+	}
+
+	cfg := testConfig("http://localhost")
+	cfg.FileConcurrencyConfigured = true
+	cfg.FileConcurrency = 0
+	s := New(cfg, nil)
+	if s.Files != nil {
+		t.Fatal("expected nil file semaphore for unlimited concurrency")
+	}
+	for i := 0; i < 200; i++ {
+		rel, ok := s.acquireFileSlot()
+		if !ok {
+			t.Fatalf("unlimited file slot denied at %d", i)
+		}
+		rel()
+	}
+}
+
 func TestPublicSourceAddresses(t *testing.T) {
 	for _, raw := range []string{"127.0.0.1", "::1", "169.254.169.254", "10.0.0.1", "172.16.0.1", "192.168.0.1", "100.64.0.1", "::ffff:127.0.0.1", "198.18.0.1", "2001:db8::1"} {
 		if publicIP(net.ParseIP(raw)) {

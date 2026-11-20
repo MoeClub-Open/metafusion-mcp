@@ -155,12 +155,11 @@ func (s *Server) addFileTools() {
 		if !s.limiter.AllowAPI(p, "GET", "/mcp/files") {
 			return toolError("rate_limited"), nil
 		}
-		select {
-		case s.Files <- struct{}{}:
-			defer func() { <-s.Files }()
-		default:
+		release, ok := s.acquireFileSlot()
+		if !ok {
 			return toolError("file_workers_busy"), nil
 		}
+		defer release()
 		var in fileInput
 		if decodeArguments(r.Params.Arguments, &in) != nil {
 			return toolError("invalid_arguments"), nil
@@ -189,12 +188,11 @@ func (s *Server) upload(ctx context.Context, in fileInput) *mcp.CallToolResult {
 	if !slices.Contains(p.Grant.Scopes, "storage.asset.upload") && !slices.Contains(p.Grant.Scopes, "*") {
 		return toolError("insufficient_scope")
 	}
-	select {
-	case s.Files <- struct{}{}:
-		defer func() { <-s.Files }()
-	default:
+	release, slotOK := s.acquireFileSlot()
+	if !slotOK {
 		return toolError("file_workers_busy")
 	}
+	defer release()
 	f, digest, size, e := loadFile(ctx, in)
 	if e != nil {
 		return toolError(e.Error())

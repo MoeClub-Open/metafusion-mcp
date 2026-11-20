@@ -12,7 +12,7 @@
 
 配置：`MCP_PUBLIC_URL`、`MCP_API_URL`、`MCP_AUTH_URL`（HTTP(S) origin），`MCP_DATABASE_URL`（仅自有 mcp schema 角色），`MCP_ENCRYPTION_KEY`（32 字节随机值的 base64）。`MCP_SKILLS_REVISION`、`MCP_DOCS_REVISION` 为对应公开仓库的完整提交 SHA；`MCP_OBJECT_ORIGINS` 为运维明确允许上传的 HTTP(S) 对象存储 origin 列表，可包含容器内网 RustFS 地址。此白名单只接受原生存储 API 签发的上传地址；agent 提供的文件来源仍必须是公开 HTTPS URL。
 
-显式运行 `mcp -migrate` 建立自有 schema，再启动 `mcp`；HTTP 启动只读检查。默认数据库连接池 32/16，HTTP 上游空闲连接总计 1024、单上游 256。读写各 180 RPM，按已验证用户计数；admin 组不计业务 RPM。当前固定窗口计数为进程内；多实例全局额度需另接共享计数。
+显式运行 `mcp -migrate` 建立自有 schema，再启动 `mcp`；HTTP 启动只读检查。默认数据库连接池 `32/16`（可由 `MCP_DB_MAX_OPEN_CONNS` / `MCP_DB_MAX_IDLE_CONNS` 配置，1–256），HTTP 上游空闲连接默认总计 `1024`、单上游 `256`、超时 `45s`（`MCP_HTTP_MAX_IDLE_CONNS` / `MCP_HTTP_MAX_IDLE_CONNS_PER_HOST` / `MCP_HTTP_TIMEOUT_SECONDS`），文件中转并发默认 `64`（`MCP_FILE_CONCURRENCY`，`0` 为不限制）。默认读、写与 OAuth 注册各 `180` RPM（`MCP_RATE_LIMIT_READ_RPM` / `MCP_RATE_LIMIT_WRITE_RPM` / `MCP_RATE_LIMIT_OAUTH_RPM`，`0` 为不限制），按已验证用户或对端 IP 计数；admin 组不计业务 RPM。当前固定窗口计数为进程内；多实例全局额度需另接共享计数。
 
 工具包含通用 API、契约、技能读取、站内和全网搜索、外部 HTTP 请求、可选身份候选查询、工作副本、提交与 PR，以及按明确 URL 或 base64 输入处理文件。URL 文件限 1 GiB，base64 受 8 MiB MCP 请求体限制。平台和外部网络的未知写入结果不自动重放。
 

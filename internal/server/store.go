@@ -6,7 +6,11 @@ import (
 	_ "embed"
 	"encoding/json"
 	"errors"
+	"fmt"
 	_ "github.com/lib/pq"
+	"os"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -39,8 +43,28 @@ func OpenStore(dsn string) (*Store, error) {
 	if e != nil {
 		return nil, e
 	}
-	d.SetMaxOpenConns(32)
-	d.SetMaxIdleConns(16)
+	maxOpen := 32
+	if value := strings.TrimSpace(os.Getenv("MCP_DB_MAX_OPEN_CONNS")); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed < 1 || parsed > 256 {
+			d.Close()
+			return nil, fmt.Errorf("invalid MCP_DB_MAX_OPEN_CONNS")
+		}
+		maxOpen = parsed
+	}
+	maxIdle := min(16, maxOpen)
+	if value := strings.TrimSpace(os.Getenv("MCP_DB_MAX_IDLE_CONNS")); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed < 0 || parsed > maxOpen {
+			d.Close()
+			return nil, fmt.Errorf("invalid MCP_DB_MAX_IDLE_CONNS")
+		}
+		maxIdle = parsed
+	}
+	d.SetMaxOpenConns(maxOpen)
+	d.SetMaxIdleConns(maxIdle)
+	d.SetConnMaxIdleTime(5 * time.Minute)
+	d.SetConnMaxLifetime(time.Hour)
 	return &Store{d}, nil
 }
 func (s *Store) Migrate(ctx context.Context) error {

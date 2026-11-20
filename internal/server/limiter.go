@@ -3,7 +3,6 @@ package server
 import (
 	"net"
 	"net/http"
-	"net/url"
 	"slices"
 	"strings"
 	"sync"
@@ -17,20 +16,30 @@ type bucket struct {
 type limiter struct {
 	mu    sync.Mutex
 	items map[string]bucket
+	cfg   RateLimitConfig
 }
 
-func newLimiter() *limiter { return &limiter{items: map[string]bucket{}} }
-func (l *limiter) Allow(r *http.Request) bool {
-	// RemoteAddr is the actual trusted peer. Never accept client-supplied proxy IP headers.
-	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
-	key := ip
-	limit := 180
-	if bearer := r.Header.Get("Authorization"); bearer != "" {
-		key = hash(bearer)
+func defaultRateLimitConfig() RateLimitConfig {
+	return RateLimitConfig{
+		Configured: true,
+		ReadRPM:    defaultRateLimitRPM,
+		WriteRPM:   defaultRateLimitRPM,
+		OAuthRPM:   defaultRateLimitRPM,
 	}
-	if strings.HasPrefix(r.URL.Path, "/mcp/oauth/") {
-		key = "oauth:" + ip
-		limit = 180
+}
+
+func newLimiter() *limiter { return newLimiterWithConfig(defaultRateLimitConfig()) }
+
+func newLimiterWithConfig(cfg RateLimitConfig) *limiter {
+	if !cfg.Configured {
+		cfg = defaultRateLimitConfig()
+	}
+	return &limiter{items: map[string]bucket{}, cfg: cfg}
+}
+
+func (l *limiter) allowKey(key string, limit int) bool {
+	if limit <= 0 {
+		return true
 	}
 	now := time.Now()
 	l.mu.Lock()
@@ -54,15 +63,30 @@ func (l *limiter) Allow(r *http.Request) bool {
 	return b.Count <= limit
 }
 
+func (l *limiter) Allow(r *http.Request) bool {
+	// RemoteAddr is the actual trusted peer. Never accept client-supplied proxy IP headers.
+	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
+	key := ip
+	limit := l.cfg.ReadRPM
+	if bearer := r.Header.Get("Authorization"); bearer != "" {
+		key = hash(bearer)
+	}
+	if strings.HasPrefix(r.URL.Path, "/mcp/oauth/") {
+		key = "oauth:" + ip
+		limit = l.cfg.OAuthRPM
+	}
+	return l.allowKey(key, limit)
+}
+
 func (l *limiter) AllowAPI(p Principal, method, path string) bool {
 	if slices.Contains(p.Groups, "admin") {
 		return true
 	}
 	kind := "write"
+	limit := l.cfg.WriteRPM
 	if readOperation(strings.ToUpper(method), path) {
 		kind = "read"
+		limit = l.cfg.ReadRPM
 	}
-	r := &http.Request{RemoteAddr: p.Grant.UserID + ":0", Header: make(http.Header), URL: &url.URL{Path: "/mcp"}}
-	r.Header.Set("Authorization", p.Grant.UserID+":"+kind)
-	return l.Allow(r)
+	return l.allowKey(hash(p.Grant.UserID+":"+kind), limit)
 }

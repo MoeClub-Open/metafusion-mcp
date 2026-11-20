@@ -3,10 +3,27 @@ package server
 import (
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 )
+
+const (
+	defaultRateLimitRPM       = 180
+	defaultFileConcurrency    = 64
+	defaultHTTPMaxIdleConns   = 1024
+	defaultHTTPMaxIdlePerHost = 256
+	defaultHTTPTimeoutSeconds = 45
+)
+
+type RateLimitConfig struct {
+	Configured bool
+	ReadRPM    int
+	WriteRPM   int
+	OAuthRPM   int
+}
 
 type Config struct {
 	PublicURL, APIURL, AuthURL, DatabaseURL, Listen string
@@ -15,6 +32,12 @@ type Config struct {
 	SkillsRevision, DocsRevision                    string
 	ObjectOrigins                                   []string
 	SearchProvider, SearchURL, SearchAPIKey         string
+	RateLimit                                       RateLimitConfig
+	FileConcurrency                                 int
+	FileConcurrencyConfigured                       bool
+	HTTPMaxIdleConns                                int
+	HTTPMaxIdleConnsPerHost                         int
+	HTTPTimeoutSeconds                              int
 }
 
 func LoadConfig() (Config, error) {
@@ -91,5 +114,53 @@ func LoadConfig() (Config, error) {
 			c.AllowedOrigins = append(c.AllowedOrigins, origin)
 		}
 	}
+	var err error
+	if c.RateLimit.ReadRPM, err = envNonNegInt("MCP_RATE_LIMIT_READ_RPM", defaultRateLimitRPM); err != nil {
+		return c, err
+	}
+	if c.RateLimit.WriteRPM, err = envNonNegInt("MCP_RATE_LIMIT_WRITE_RPM", defaultRateLimitRPM); err != nil {
+		return c, err
+	}
+	if c.RateLimit.OAuthRPM, err = envNonNegInt("MCP_RATE_LIMIT_OAUTH_RPM", defaultRateLimitRPM); err != nil {
+		return c, err
+	}
+	c.RateLimit.Configured = true
+	if c.FileConcurrency, err = envNonNegInt("MCP_FILE_CONCURRENCY", defaultFileConcurrency); err != nil {
+		return c, err
+	}
+	c.FileConcurrencyConfigured = true
+	if c.HTTPMaxIdleConns, err = envPosInt("MCP_HTTP_MAX_IDLE_CONNS", defaultHTTPMaxIdleConns); err != nil {
+		return c, err
+	}
+	if c.HTTPMaxIdleConnsPerHost, err = envPosInt("MCP_HTTP_MAX_IDLE_CONNS_PER_HOST", defaultHTTPMaxIdlePerHost); err != nil {
+		return c, err
+	}
+	if c.HTTPTimeoutSeconds, err = envPosInt("MCP_HTTP_TIMEOUT_SECONDS", defaultHTTPTimeoutSeconds); err != nil {
+		return c, err
+	}
 	return c, nil
+}
+
+func envNonNegInt(name string, def int) (int, error) {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return def, nil
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 0 {
+		return 0, fmt.Errorf("%s must be a non-negative integer", name)
+	}
+	return n, nil
+}
+
+func envPosInt(name string, def int) (int, error) {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return def, nil
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 1 {
+		return 0, fmt.Errorf("%s must be a positive integer", name)
+	}
+	return n, nil
 }

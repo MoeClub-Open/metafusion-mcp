@@ -67,6 +67,15 @@ func main() {
 		return
 	}
 	s := server.New(c, store)
+	slog.Info("MetaFusion MCP concurrency configured",
+		"rate_limit_read_rpm", c.RateLimit.ReadRPM,
+		"rate_limit_write_rpm", c.RateLimit.WriteRPM,
+		"rate_limit_oauth_rpm", c.RateLimit.OAuthRPM,
+		"file_concurrency", c.FileConcurrency,
+		"http_max_idle_conns", c.HTTPMaxIdleConns,
+		"http_max_idle_conns_per_host", c.HTTPMaxIdleConnsPerHost,
+		"http_timeout_seconds", c.HTTPTimeoutSeconds,
+	)
 	h := &http.Server{Addr: c.Listen, Handler: s.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 600 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10}
 	stop, release := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer release()
