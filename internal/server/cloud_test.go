@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -112,6 +113,48 @@ func TestPublicSourceAddresses(t *testing.T) {
 	defer f.Close()
 	if n != 5 || digest != "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824" {
 		t.Fatal("incorrect file digest")
+	}
+}
+
+func TestLoadFileSetsUserAgentAndClassifiesHTTPStatus(t *testing.T) {
+	var gotUA string
+	status := http.StatusOK
+	body := "hello"
+	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		gotUA = r.Header.Get("User-Agent")
+		return &http.Response{
+			StatusCode: status,
+			Body:       io.NopCloser(bytes.NewBufferString(body)),
+			Header:     make(http.Header),
+		}, nil
+	})}
+
+	f, digest, n, err := loadFileWithClient(context.Background(), client, fileInput{SourceURL: "https://cdn.example.com/cover.jpg"})
+	if err != nil {
+		t.Fatalf("expected 200 to succeed, got %v", err)
+	}
+	f.Close()
+	os.Remove(f.Name())
+	if gotUA != "MetaFusion-MCP/1.0" {
+		t.Fatalf("expected User-Agent MetaFusion-MCP/1.0, got %q", gotUA)
+	}
+	if n != 5 || digest != "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824" {
+		t.Fatalf("unexpected digest/size: %s %d", digest, n)
+	}
+
+	for _, tc := range []struct {
+		code int
+		want string
+	}{
+		{http.StatusForbidden, "source_forbidden"},
+		{http.StatusNotFound, "source_not_found"},
+		{http.StatusBadGateway, "source_unavailable"},
+	} {
+		status = tc.code
+		_, _, _, err = loadFileWithClient(context.Background(), client, fileInput{SourceURL: "https://cdn.example.com/cover.jpg"})
+		if err == nil || err.Error() != tc.want {
+			t.Fatalf("status %d: want %q, got %v", tc.code, tc.want, err)
+		}
 	}
 }
 

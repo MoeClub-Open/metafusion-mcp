@@ -85,6 +85,12 @@ type fileInput struct {
 
 // Content is spooled in the service's private temp directory, never in the Agent's environment.
 func loadFile(ctx context.Context, in fileInput) (*os.File, string, int64, error) {
+	client := publicClient()
+	defer client.CloseIdleConnections()
+	return loadFileWithClient(ctx, client, in)
+}
+
+func loadFileWithClient(ctx context.Context, client *http.Client, in fileInput) (*os.File, string, int64, error) {
 	if (in.SourceURL == "") == (in.Base64 == "") {
 		return nil, "", 0, errors.New("exactly_one_source_required")
 	}
@@ -98,15 +104,21 @@ func loadFile(ctx context.Context, in fileInput) (*os.File, string, int64, error
 		if e != nil {
 			return nil, "", 0, e
 		}
-		client := publicClient()
-		defer client.CloseIdleConnections()
+		r.Header.Set("User-Agent", "MetaFusion-MCP/1.0")
 		resp, e := client.Do(r)
 		if e != nil {
 			return nil, "", 0, errors.New("source_unavailable")
 		}
 		if resp.StatusCode != 200 {
 			resp.Body.Close()
-			return nil, "", 0, errors.New("source_unavailable")
+			switch resp.StatusCode {
+			case http.StatusForbidden:
+				return nil, "", 0, errors.New("source_forbidden")
+			case http.StatusNotFound:
+				return nil, "", 0, errors.New("source_not_found")
+			default:
+				return nil, "", 0, errors.New("source_unavailable")
+			}
 		}
 		source = resp.Body
 	} else {
